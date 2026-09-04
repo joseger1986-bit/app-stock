@@ -700,7 +700,6 @@ function setupEvents() {
     "#stock-search",
     "#stock-category-filter",
     "#stock-brand-filter",
-    "#stock-location-filter",
     "#stock-show-inactive"
   ].forEach((selector) => {
     document.querySelector(selector)?.addEventListener("input", renderStockTable);
@@ -935,7 +934,6 @@ function renderAll() {
 function renderSelects() {
   fillSelect("#stock-category-filter", state.categorias, "Todas las categorías");
   fillSelect("#stock-brand-filter", state.marcas, "Todas las marcas");
-  fillSelect("#stock-location-filter", state.ubicaciones, "Todas las ubicaciones");
   fillSelect("#transfer-origin", state.ubicaciones, "Elegir origen");
   fillSelect("#transfer-destination", state.ubicaciones, "Elegir destino");
   fillSelect("#transfer-category-filter", state.categorias, "Todas las categorías");
@@ -1971,12 +1969,13 @@ async function insertStockMovement(productId, locationId, type, quantity) {
 
 function renderStockTable() {
   const tbody = document.querySelector("#stock-table");
+  const cards = document.querySelector("#stock-cards");
   if (!tbody) return;
 
   const search = normalizeText(document.querySelector("#stock-search")?.value || "");
   const categoryId = document.querySelector("#stock-category-filter")?.value || "";
   const brandId = document.querySelector("#stock-brand-filter")?.value || "";
-  const locationId = document.querySelector("#stock-location-filter")?.value || "";
+  const locationId = getDepositoMinoristaId();
   const showInactive = document.querySelector("#stock-show-inactive")?.checked || false;
 
   const rows = state.stock
@@ -1984,14 +1983,21 @@ function renderStockTable() {
     .filter((row) => showInactive || row.productos.activo !== false)
     .filter((row) => !categoryId || row.productos.categoria_id === categoryId)
     .filter((row) => !brandId || row.productos.marca_id === brandId)
-    .filter((row) => !locationId || row.ubicacion_id === locationId)
+    .filter((row) => row.ubicacion_id === locationId)
     .filter((row) => matchesWords(row.productos.nombre, search))
     .sort(compareStockRows);
 
   renderStockSortHeaders();
 
+  if (!locationId) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No se encontró Depósito Minorista.</td></tr>';
+    if (cards) cards.innerHTML = '<div class="empty stock-card-empty">No se encontró Depósito Minorista.</div>';
+    return;
+  }
+
   if (!rows.length) {
     tbody.innerHTML = '<tr><td colspan="5" class="empty">No hay stock para mostrar.</td></tr>';
+    if (cards) cards.innerHTML = '<div class="empty stock-card-empty">No hay stock para mostrar.</div>';
     return;
   }
 
@@ -2009,6 +2015,31 @@ function renderStockTable() {
       `;
     })
     .join("");
+
+  if (cards) {
+    cards.innerHTML = rows.map(renderStockCard).join("");
+  }
+}
+
+function renderStockCard(row) {
+  const product = row.productos;
+  const unit = getProductUnit(product);
+  const brand = product.marcas?.nombre || "-";
+  const category = product.categorias?.nombre || "-";
+
+  return `
+    <article class="stock-card">
+      <div>
+        <h3>${escapeHtml(product.nombre)}</h3>
+        <p>${escapeHtml(brand)} · ${escapeHtml(category)}</p>
+      </div>
+      <strong>Stock: ${escapeHtml(formatQuantityWithUnit(row.cantidad, unit))}</strong>
+    </article>
+  `;
+}
+
+function getDepositoMinoristaId() {
+  return state.ubicaciones.find((location) => location.nombre === DEPOSITO_MINORISTA)?.id || "";
 }
 
 function setStockSort(field) {
