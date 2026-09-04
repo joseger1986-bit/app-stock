@@ -2234,10 +2234,12 @@ function updateTransferAvailable() {
   if (summary) {
     summary.innerHTML = `
       <strong>${escapeHtml(product.nombre)}</strong>
-      ${brand ? `<span>Marca: ${escapeHtml(brand)}</span>` : ""}
-      ${category ? `<span>Categoría: ${escapeHtml(category)}</span>` : ""}
-      <span>Stock disponible en origen: ${escapeHtml(formatQuantityWithUnit(available, unit))}</span>
-      <span class="unit-pill">Unidad de stock: ${escapeHtml(unitLabel(unit))}</span>
+      ${brand ? `<span class="transfer-selected-desktop">Marca: ${escapeHtml(brand)}</span>` : ""}
+      ${category ? `<span class="transfer-selected-desktop">Categoría: ${escapeHtml(category)}</span>` : ""}
+      <span class="transfer-selected-desktop">Stock disponible en origen: ${escapeHtml(formatQuantityWithUnit(available, unit))}</span>
+      <span class="unit-pill transfer-selected-desktop">Unidad de stock: ${escapeHtml(unitLabel(unit))}</span>
+      <span class="transfer-selected-mobile transfer-selected-meta">${escapeHtml([category, brand].filter(Boolean).join(" · "))}</span>
+      <span class="transfer-selected-mobile transfer-selected-available">Disponible: ${escapeHtml(formatQuantityWithUnit(available, unit))}</span>
     `;
   }
   picker?.classList.remove("hidden");
@@ -2321,10 +2323,12 @@ function addTransferItem() {
 
 function renderTransferItems() {
   const tbody = document.querySelector("#transfer-items");
+  const cards = document.querySelector("#transfer-items-cards");
   if (!tbody) return;
 
   if (!state.transferItems.length) {
     tbody.innerHTML = '<tr><td colspan="4" class="empty">Agregá productos para transferir.</td></tr>';
+    if (cards) cards.innerHTML = '<div class="empty transfer-card-empty">Agregá productos para transferir.</div>';
     updateConfirmTransferButton();
     return;
   }
@@ -2344,12 +2348,26 @@ function renderTransferItems() {
     `)
     .join("");
 
+  if (cards) {
+    cards.innerHTML = state.transferItems
+      .map((item) => `
+        <article class="transfer-item-card">
+          <div>
+            <h3>${escapeHtml(item.nombre)}</h3>
+            <strong>${escapeHtml(formatQuantityWithUnit(item.cantidad, item.unidad_stock))}</strong>
+          </div>
+          <button class="row-action" type="button" data-remove-product="${item.producto_id}">Quitar</button>
+        </article>
+      `)
+      .join("");
+  }
+
   tbody.querySelectorAll("[data-transfer-quantity]").forEach((input) => {
     input.addEventListener("change", () => updateTransferItemQuantity(input));
     input.addEventListener("input", updateConfirmTransferButton);
   });
 
-  tbody.querySelectorAll("[data-remove-product]").forEach((button) => {
+  document.querySelectorAll("[data-remove-product]").forEach((button) => {
     button.addEventListener("click", () => {
       state.transferItems = state.transferItems.filter(
         (item) => item.producto_id !== button.dataset.removeProduct
