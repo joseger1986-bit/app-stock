@@ -771,6 +771,10 @@ th {
   display: none;
 }
 
+.device-cards {
+  display: none;
+}
+
 .line-quantity {
   width: 96px;
   min-height: 38px;
@@ -1518,6 +1522,111 @@ th {
   }
 
   .remito-card-empty {
+    padding: 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+
+  #screen-dispositivos .section-head {
+    margin-bottom: 8px;
+  }
+
+  #screen-dispositivos .section-head .secondary-action {
+    min-height: 36px;
+    padding: 0 12px;
+  }
+
+  #screen-dispositivos .account-panel {
+    gap: 8px;
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  #screen-dispositivos .account-panel h3 {
+    font-size: 1rem;
+  }
+
+  #screen-dispositivos .account-form {
+    gap: 8px;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  #screen-dispositivos .account-form label {
+    gap: 4px;
+    font-size: 0.84rem;
+  }
+
+  #screen-dispositivos .account-form input {
+    min-height: 38px;
+    padding: 7px 9px;
+  }
+
+  #screen-dispositivos .account-actions .secondary-action {
+    min-height: 36px;
+  }
+
+  #screen-dispositivos .table-wrap {
+    display: none;
+  }
+
+  #screen-dispositivos .device-cards {
+    display: grid;
+    gap: 8px;
+  }
+
+  .device-card {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+
+  .device-card-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .device-card .device-name-input {
+    min-height: 38px;
+    padding: 7px 9px;
+    font-weight: 700;
+  }
+
+  .device-card .status-badge {
+    min-height: 26px;
+    padding: 4px 7px;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+  }
+
+  .device-card-meta {
+    display: grid;
+    gap: 3px;
+    color: var(--muted);
+    font-size: 0.84rem;
+    line-height: 1.25;
+  }
+
+  .device-card-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .device-card-actions .row-action {
+    min-height: 36px;
+    padding: 0 8px;
+    font-size: 0.84rem;
+  }
+
+  .device-card-empty {
     padding: 12px;
     background: var(--panel);
     border: 1px solid var(--line);

@@ -407,15 +407,18 @@ function renderAccessAccount() {
 
 function renderDevices() {
   const tbody = document.querySelector("#devices-table");
+  const cards = document.querySelector("#device-cards");
   if (!tbody) return;
 
   if (!state.isAdmin) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty">No autorizado.</td></tr>';
+    if (cards) cards.innerHTML = '<div class="empty device-card-empty">No autorizado.</div>';
     return;
   }
 
   if (!state.devices.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty">No hay dispositivos para mostrar.</td></tr>';
+    if (cards) cards.innerHTML = '<div class="empty device-card-empty">No hay dispositivos para mostrar.</div>';
     return;
   }
 
@@ -438,9 +441,34 @@ function renderDevices() {
     </tr>
   `).join("");
 
-  tbody.querySelectorAll("[data-device-action]").forEach((button) => {
+  if (cards) {
+    cards.innerHTML = state.devices.map(renderDeviceCard).join("");
+  }
+
+  document.querySelectorAll("[data-device-action]").forEach((button) => {
     button.addEventListener("click", () => handleDeviceAction(button));
   });
+}
+
+function renderDeviceCard(device) {
+  return `
+    <article class="device-card">
+      <div class="device-card-head">
+        <input class="device-name-input" type="text" value="${escapeHtml(device.nombre || "")}" placeholder="Dispositivo nuevo" data-device-name="${device.id}">
+        <span class="status-badge status-${escapeHtml(device.estado)}">${escapeHtml(deviceStatusLabel(device.estado))}</span>
+      </div>
+      <div class="device-card-meta">
+        <span>Usuario: ${escapeHtml(getDeviceUserLabel(device))}</span>
+        <span>Solicitud: ${escapeHtml(formatDateTime(device.fecha_solicitud))}</span>
+        <span>Último acceso: ${escapeHtml(formatDateTime(device.ultimo_acceso) || "-")}</span>
+      </div>
+      <div class="device-card-actions">
+        <button class="row-action neutral" type="button" data-device-action="rename" data-device-id="${device.id}">Renombrar</button>
+        ${device.estado !== "aprobado" ? `<button class="row-action neutral" type="button" data-device-action="approve" data-device-id="${device.id}">Aprobar</button>` : ""}
+        ${device.estado !== "revocado" ? `<button class="row-action" type="button" data-device-action="revoke" data-device-id="${device.id}">Revocar</button>` : ""}
+      </div>
+    </article>
+  `;
 }
 
 async function handleDeviceAction(button) {
@@ -453,7 +481,7 @@ async function handleDeviceAction(button) {
     button.disabled = true;
 
     if (action === "rename") {
-      const name = document.querySelector(`[data-device-name="${id}"]`)?.value || "";
+      const name = button.closest("tr, .device-card")?.querySelector(`[data-device-name="${id}"]`)?.value || "";
       const { error } = await supabaseClient.rpc("app_rename_device", {
         p_device_id: id,
         p_nombre: name
