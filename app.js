@@ -1070,7 +1070,6 @@ function renderMerchandiseProductOptions() {
       renderMerchandiseProductOptions();
       updateMerchandiseQuantityLabel();
       renderMerchandiseProductSummary();
-      document.querySelector("#merchandise-quantity")?.focus();
     });
   });
 }
