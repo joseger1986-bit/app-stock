@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>App Stock</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="config.js"></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Control interno</p>
+        <h1>App Stock</h1>
+      </div>
+      <div class="connection" id="connection-status">Sin configurar</div>
+    </header>
+
+    <section class="auth-shell" id="auth-screen">
+      <div class="auth-card">
+        <div>
+          <p class="eyebrow">Acceso seguro</p>
+          <h2>Ingresar a App Stock</h2>
+        </div>
+        <form class="auth-form" id="login-form">
+          <label>
+            Usuario
+            <input id="login-user" type="text" autocomplete="username" required>
+          </label>
+          <label>
+            Contraseña
+            <input id="login-password" type="password" autocomplete="current-password" required>
+          </label>
+          <button class="primary-action" id="login-button" type="submit">Ingresar</button>
+        </form>
+        <div class="device-pending hidden" id="device-pending">
+          <strong>Este dispositivo todavía no está autorizado.</strong>
+          <span>La solicitud quedó pendiente para que el administrador la apruebe.</span>
+          <span>ID del dispositivo: <code id="current-device-id">-</code></span>
+          <label>
+            Nombre descriptivo opcional
+            <input id="device-name" type="text" placeholder="Ej: PC Depósito">
+          </label>
+          <button class="secondary-action" id="update-device-name" type="button">Guardar nombre</button>
+          <button class="secondary-action" id="refresh-device-status" type="button">Volver a verificar</button>
+        </div>
+        <div class="message" id="auth-message" role="status"></div>
+      </div>
+    </section>
+
+    <nav class="main-nav hidden" id="main-nav" aria-label="Menú principal">
+      <button class="nav-item active" data-screen="stock" type="button">Stock</button>
+      <button class="nav-item" data-screen="mercaderia" type="button">Mercadería</button>
+      <button class="nav-item" data-screen="transferencias" type="button">Transferencias</button>
+      <button class="nav-item" data-screen="remitos" type="button">Remitos</button>
+      <button class="nav-item" data-screen="locales" type="button">Locales</button>
+      <button class="nav-item admin-only hidden" data-screen="dispositivos" type="button">Dispositivos</button>
+      <button class="nav-item" id="logout-button" type="button">Cerrar sesión</button>
+    </nav>
+
+    <main class="app-shell hidden" id="app-shell">
+      <section class="screen active" id="screen-stock" aria-labelledby="stock-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Existencias</p>
+            <h2 id="stock-title">Stock</h2>
+          </div>
+          <select id="stock-location-filter" aria-label="Ubicación">
+            <option value="">Todas las ubicaciones</option>
+          </select>
+        </div>
+
+        <div class="filters">
+          <input id="stock-search" type="search" placeholder="Buscar por nombre">
+          <select id="stock-category-filter" aria-label="Categoría">
+            <option value="">Todas las categorías</option>
+          </select>
+          <select id="stock-brand-filter" aria-label="Marca">
+            <option value="">Todas las marcas</option>
+          </select>
+          <label class="check">
+            <input id="stock-show-inactive" type="checkbox">
+            Mostrar inactivos
+          </label>
+        </div>
+        <div class="message" id="stock-message" role="status"></div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><button class="sort-head" data-stock-sort="articulo" type="button">Artículo <span class="sort-arrow"></span></button></th>
+                <th><button class="sort-head" data-stock-sort="categoria" type="button">Categoría <span class="sort-arrow"></span></button></th>
+                <th><button class="sort-head" data-stock-sort="marca" type="button">Marca <span class="sort-arrow"></span></button></th>
+                <th><button class="sort-head" data-stock-sort="ubicacion" type="button">Ubicación <span class="sort-arrow"></span></button></th>
+                <th class="number"><button class="sort-head number" data-stock-sort="stock" type="button">Stock <span class="sort-arrow"></span></button></th>
+              </tr>
+            </thead>
+            <tbody id="stock-table">
+              <tr>
+                <td colspan="5" class="empty">Sin datos cargados todavía.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-mercaderia" aria-labelledby="mercaderia-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Depósito Minorista</p>
+            <h2 id="mercaderia-title">Mercadería</h2>
+          </div>
+        </div>
+
+        <div class="work-panel">
+          <div class="mode-switch" aria-label="Tipo de carga">
+            <button class="mode-button active" data-merchandise-mode="existing" type="button">Producto existente</button>
+            <button class="mode-button" data-merchandise-mode="new" type="button">Producto nuevo</button>
+          </div>
+          <div class="excel-actions">
+            <button class="secondary-action" id="download-excel-template" type="button">Descargar plantilla Excel</button>
+            <button class="secondary-action" id="import-excel-button" type="button">Importar Excel</button>
+            <input class="sr-only" id="excel-import-input" type="file" accept=".xlsx,.xls,.csv">
+          </div>
+
+          <form class="form-grid merchandise-form" id="merchandise-form">
+            <div class="mode-section wide" id="existing-product-section">
+              <label>
+                Buscar producto existente
+                <input id="merchandise-product-search" type="search" placeholder="Buscar por producto, marca o categoría">
+              </label>
+              <div class="inline-grid">
+                <label>
+                  Categoría
+                  <select id="merchandise-category-filter" aria-label="Categoría"></select>
+                </label>
+                <label>
+                  Marca
+                  <select id="merchandise-brand-filter" aria-label="Marca"></select>
+                </label>
+              </div>
+              <div class="suggestions-list" id="merchandise-suggestions"></div>
+              <div class="product-summary hidden" id="merchandise-product-summary"></div>
+              <button class="secondary-action hidden" id="edit-product" type="button">Editar producto</button>
+              <div class="edit-panel hidden" id="edit-product-panel">
+                <label>
+                  Nombre del artículo
+                  <input id="edit-product-name" type="text">
+                </label>
+                <div class="inline-grid">
+                  <label>
+                    Categoría
+                    <select id="edit-product-category"></select>
+                  </label>
+                  <label>
+                    Marca
+                    <input id="edit-product-brand" type="text" list="brand-options">
+                  </label>
+                </div>
+                <div class="inline-grid">
+                  <label>
+                    Precio de costo
+                    <input id="edit-product-cost" type="number" min="0" step="0.01">
+                  </label>
+                  <label>
+                    Precio de venta
+                    <input id="edit-product-price" type="number" min="0" step="0.01">
+                  </label>
+                </div>
+                <label>
+                  Stock mínimo
+                  <input id="edit-product-min-stock" type="number" min="0" step="1">
+                </label>
+                <div class="actions-row">
+                  <button class="primary-action" id="save-product-edit" type="button">Guardar cambios</button>
+                  <button class="secondary-action" id="cancel-product-edit" type="button">Cancelar</button>
+                </div>
+              </div>
+              <div class="stock-operation" id="stock-operation">
+                <label class="radio-card">
+                  <input type="radio" name="stock-operation" value="add" checked>
+                  <span>Agregar stock</span>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="stock-operation" value="subtract">
+                  <span>Restar stock</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="mode-section wide hidden" id="new-product-section">
+              <label>
+                Nombre del artículo
+                <input id="merchandise-product-name" type="text" placeholder="Ej: Boxer Elemento 201">
+              </label>
+              <div class="inline-grid">
+                <div class="category-manager">
+                  <label>
+                    Categoría
+                    <select id="merchandise-product-category"></select>
+                  </label>
+                  <div class="category-actions">
+                    <button class="mini-action" id="show-new-category" type="button">+ Nueva categoría</button>
+                    <button class="mini-action" id="show-edit-category" type="button" disabled>Editar categoría</button>
+                  </div>
+                  <div class="category-inline-form hidden" id="new-category-panel">
+                    <input id="new-category-name" type="text" placeholder="Nombre de categoría">
+                    <button class="secondary-action" id="save-new-category" type="button">Guardar</button>
+                  </div>
+                  <div class="category-inline-form hidden" id="edit-category-panel">
+                    <input id="edit-category-name" type="text" placeholder="Nuevo nombre">
+                    <button class="secondary-action" id="save-category-edit" type="button">Guardar</button>
+                    <button class="secondary-action" id="cancel-category-edit" type="button">Cancelar</button>
+                  </div>
+                </div>
+                <label>
+                  Marca
+                  <input id="merchandise-product-brand" type="text" list="brand-options" placeholder="Ej: Elemento">
+                </label>
+              </div>
+              <div class="inline-grid">
+                <label>
+                  Unidad de stock
+                  <select id="merchandise-unit">
+                    <option value="unidad">Unidad</option>
+                    <option value="docena">Docena</option>
+                  </select>
+                </label>
+                <label>
+                  Precio de costo (opcional)
+                  <input id="merchandise-cost" type="number" min="0" step="0.01">
+                </label>
+              </div>
+              <div class="inline-grid">
+                <label>
+                  Precio de venta (opcional)
+                  <input id="merchandise-price" type="number" min="0" step="0.01">
+                </label>
+                <label>
+                  Stock mínimo (opcional)
+                  <input id="merchandise-min-stock" type="number" min="0" step="1">
+                </label>
+              </div>
+            </div>
+
+            <label class="quantity-field">
+              <span id="merchandise-quantity-label">Cantidad</span>
+              <input id="merchandise-quantity" type="number" min="0" step="1">
+            </label>
+            <button class="primary-action hidden merchandise-submit" id="save-merchandise" type="button">Crear producto</button>
+            <button class="primary-action" id="confirm-stock-operation" type="button">Confirmar ingreso</button>
+          </form>
+          <div class="message" id="merchandise-message" role="status"></div>
+          <section class="excel-preview hidden" id="excel-preview" aria-label="Vista previa de importación">
+            <div class="preview-head">
+              <div>
+                <p class="eyebrow">Vista previa</p>
+                <h3>Importación Excel</h3>
+              </div>
+              <div class="actions-row">
+                <button class="secondary-action" id="cancel-excel-import" type="button">Cancelar</button>
+                <button class="primary-action" id="confirm-excel-import" type="button">Confirmar importación</button>
+              </div>
+            </div>
+            <div class="preview-summary" id="excel-summary"></div>
+            <div class="preview-errors hidden" id="excel-errors"></div>
+            <div class="table-wrap preview-table-wrap">
+              <table class="preview-table">
+                <thead>
+                  <tr>
+                    <th>Fila</th>
+                    <th>Nombre</th>
+                    <th>Categoría</th>
+                    <th>Marca</th>
+                    <th>Unidad de stock</th>
+                    <th class="number">Precio costo</th>
+                    <th class="number">Precio venta</th>
+                    <th class="number">Stock mínimo</th>
+                    <th class="number">Cantidad a ingresar</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="excel-preview-table"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-transferencias" aria-labelledby="transferencias-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Remitos internos</p>
+            <h2 id="transferencias-title">Nueva transferencia</h2>
+          </div>
+        </div>
+        <form class="form-grid" id="transfer-form">
+          <label>
+            Origen
+            <select id="transfer-origin"></select>
+          </label>
+          <label>
+            Destino
+            <select id="transfer-destination"></select>
+          </label>
+          <label>
+            Fecha
+            <input id="transfer-date" type="date">
+          </label>
+        </form>
+
+        <div class="work-panel">
+          <div class="filters">
+            <input id="transfer-product-search" type="search" placeholder="Buscar producto">
+            <select id="transfer-category-filter" aria-label="Categoría"></select>
+            <select id="transfer-brand-filter" aria-label="Marca"></select>
+          </div>
+          <div class="suggestions-list" id="transfer-suggestions"></div>
+          <div class="product-summary hidden" id="transfer-product-summary"></div>
+          <div class="transfer-picker hidden" id="transfer-picker">
+            <label>
+              <span id="transfer-quantity-label">Cantidad</span>
+              <input id="transfer-quantity" type="number" min="1" step="1">
+            </label>
+            <button class="secondary-action" id="add-transfer-item" type="button">Agregar</button>
+          </div>
+          <div class="table-wrap compact">
+            <table>
+              <thead>
+                <tr>
+                  <th>Artículo</th>
+                  <th class="number">Cantidad</th>
+                  <th>Unidad de stock</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="transfer-items">
+                <tr>
+                  <td colspan="4" class="empty">Agregá productos para transferir.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="message" id="transfer-message" role="status"></div>
+          <div class="receipt-actions hidden" id="transfer-receipt-actions">
+            <button class="secondary-action" id="new-transfer" type="button">Nueva transferencia</button>
+            <button class="secondary-action" data-receipt-action="view" type="button">Ver comprobante</button>
+            <button class="secondary-action" data-receipt-action="pdf" type="button">Descargar PDF</button>
+            <button class="secondary-action" data-receipt-action="whatsapp" type="button">Compartir por WhatsApp</button>
+          </div>
+          <div class="receipt-detail hidden" id="transfer-receipt-detail"></div>
+          <button class="primary-action transfer-confirm" id="confirm-transfer" type="button" disabled>Confirmar transferencia</button>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-remitos" aria-labelledby="remitos-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Historial</p>
+            <h2 id="remitos-title">Remitos</h2>
+          </div>
+        </div>
+        <div class="filters">
+          <input id="remito-search" type="search" placeholder="Buscar remito">
+          <input id="remito-date-from" type="date" aria-label="Desde">
+          <input id="remito-date-to" type="date" aria-label="Hasta">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Número</th>
+                <th>Fecha</th>
+                <th>Origen</th>
+                <th>Destino</th>
+                <th class="number">Líneas</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="remitos-table">
+              <tr>
+                <td colspan="6" class="empty">No hay remitos para mostrar.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="message" id="remitos-message" role="status"></div>
+        <div class="receipt-detail hidden" id="remito-detail"></div>
+      </section>
+
+      <datalist id="brand-options"></datalist>
+
+      <section class="screen" id="screen-locales" aria-labelledby="locales-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Ubicaciones</p>
+            <h2 id="locales-title">Locales</h2>
+          </div>
+          <button class="primary-action" type="button">Agregar ubicación</button>
+        </div>
+        <ul class="simple-list" id="locations-list"></ul>
+      </section>
+
+      <section class="screen" id="screen-dispositivos" aria-labelledby="dispositivos-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Seguridad</p>
+            <h2 id="dispositivos-title">Dispositivos</h2>
+          </div>
+          <button class="secondary-action" id="refresh-devices" type="button">Actualizar</button>
+        </div>
+
+        <div class="work-panel account-panel">
+          <div>
+            <p class="eyebrow">Usuario único</p>
+            <h3>Cuenta de acceso</h3>
+          </div>
+          <div class="form-grid account-form">
+            <label>
+              Usuario
+              <input id="access-username" type="text" autocomplete="username" placeholder="Ej: josi">
+            </label>
+            <div class="account-actions">
+              <button class="secondary-action" id="save-access-username" type="button">Guardar usuario</button>
+            </div>
+            <label>
+              Nueva contraseña
+              <input id="access-password" type="password" autocomplete="new-password">
+            </label>
+            <label>
+              Repetir contraseña
+              <input id="access-password-repeat" type="password" autocomplete="new-password">
+            </label>
+            <div class="account-actions">
+              <button class="secondary-action" id="change-access-password" type="button">Cambiar contraseña</button>
+            </div>
+          </div>
+          <div class="message" id="account-message" role="status"></div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Usuario</th>
+                <th>Fecha de solicitud</th>
+                <th>Estado</th>
+                <th>Último acceso</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="devices-table">
+              <tr>
+                <td colspan="6" class="empty">No hay dispositivos para mostrar.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="message" id="devices-message" role="status"></div>
+      </section>
+    </main>
+  </body>
+</html>

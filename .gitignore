@@ -1,0 +1,6 @@
+config.js
+.env
+.vercel
+node_modules
+dist
+backups
