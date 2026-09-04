@@ -436,11 +436,15 @@
         </div>
 
         <div class="work-panel account-panel">
-          <div>
-            <p class="eyebrow">Usuario único</p>
-            <h3>Cuenta de acceso</h3>
+          <div class="account-summary">
+            <div>
+              <p class="eyebrow">Usuario único</p>
+              <h3>Cuenta de acceso</h3>
+              <p class="account-current-user">Usuario: <strong id="access-username-summary">-</strong></p>
+            </div>
+            <button class="secondary-action" id="edit-access-account" type="button">Editar acceso</button>
           </div>
-          <div class="form-grid account-form">
+          <div class="form-grid account-form hidden" id="access-account-editor">
             <label>
               Usuario
               <input id="access-username" type="text" autocomplete="username" placeholder="Ej: josi">
@@ -458,6 +462,9 @@
             </label>
             <div class="account-actions">
               <button class="secondary-action" id="change-access-password" type="button">Cambiar contraseña</button>
+            </div>
+            <div class="account-actions account-close-actions">
+              <button class="secondary-action" id="close-access-editor" type="button">Cerrar edición</button>
             </div>
           </div>
           <div class="message" id="account-message" role="status"></div>

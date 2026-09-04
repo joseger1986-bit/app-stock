@@ -1,6 +1,7 @@
 const DEPOSITO_MINORISTA = "Depósito Minorista";
 const DEFAULT_UNIT = "unidad";
 const DEVICE_STORAGE_KEY = "app_stock_device";
+const DEVICE_BACKUP_STORAGE_KEY = "app_stock_device_backup";
 const DEVICE_COOKIE_KEY = "app_stock_device";
 
 const DEFAULT_STATE = {
@@ -243,12 +244,28 @@ async function logout() {
 async function verifyCurrentDevice() {
   clearMessage("#auth-message");
 
-  const device = ensureStoredDevice();
-  state.device = device;
-  await refreshSupabaseClientWithDevice();
-
   try {
-    let status = await fetchCurrentDeviceStatus(device);
+    let device = null;
+    let status = null;
+
+    for (const candidate of getStoredDeviceCandidates()) {
+      saveStoredDevice(candidate);
+      state.device = candidate;
+      await refreshSupabaseClientWithDevice();
+      const candidateStatus = await fetchCurrentDeviceStatus(candidate);
+      if (candidateStatus) {
+        device = candidate;
+        status = candidateStatus;
+        if (candidateStatus.estado === "aprobado") break;
+      }
+    }
+
+    if (!device) {
+      device = ensureStoredDevice();
+      state.device = device;
+      await refreshSupabaseClientWithDevice();
+    }
+
     if (!status) {
       status = await registerCurrentDevice(device);
     }
@@ -350,41 +367,52 @@ function showAuthenticatedApp() {
 }
 
 function ensureStoredDevice() {
-  const existing = getStoredDevice();
+  const existing = getStoredDeviceCandidates()[0];
   if (existing) return existing;
 
-  const device = {
-    id: generateDeviceId(),
-    secret: generateDeviceSecret()
-  };
+  const device = createStoredDevice();
   saveStoredDevice(device);
   return device;
 }
 
-function getStoredDevice() {
-  const localDevice = readStoredDeviceFromLocalStorage();
-  if (localDevice) {
-    saveStoredDevice(localDevice);
-    return localDevice;
-  }
-
-  const cookieDevice = readStoredDeviceFromCookie();
-  if (cookieDevice) {
-    saveStoredDevice(cookieDevice);
-    return cookieDevice;
-  }
-
-  return null;
+function createStoredDevice() {
+  const device = {
+    id: generateDeviceId(),
+    secret: generateDeviceSecret()
+  };
+  return device;
 }
 
-function readStoredDeviceFromLocalStorage() {
-  try {
-    const device = JSON.parse(localStorage.getItem(DEVICE_STORAGE_KEY) || "null");
-    if (isValidStoredDevice(device)) return device;
-  } catch {
-    return null;
+function getStoredDevice() {
+  return getStoredDeviceCandidates()[0] || null;
+}
+
+function getStoredDeviceCandidates() {
+  const devices = [
+    ...readStoredDevicesFromLocalStorage(),
+    readStoredDeviceFromCookie()
+  ].filter(Boolean);
+
+  const seen = new Set();
+  return devices.filter((device) => {
+    const key = `${device.id}:${device.secret}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function readStoredDevicesFromLocalStorage() {
+  const devices = [];
+  for (const key of [DEVICE_STORAGE_KEY, DEVICE_BACKUP_STORAGE_KEY]) {
+    try {
+      const device = JSON.parse(localStorage.getItem(key) || "null");
+      if (isValidStoredDevice(device)) devices.push(device);
+    } catch {
+      // Continua con la siguiente copia local.
+    }
   }
-  return null;
+  return devices;
 }
 
 function readStoredDeviceFromCookie() {
@@ -406,13 +434,15 @@ function readStoredDeviceFromCookie() {
 function saveStoredDevice(device) {
   try {
     localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify(device));
+    localStorage.setItem(DEVICE_BACKUP_STORAGE_KEY, JSON.stringify(device));
   } catch {
     // Si el navegador bloquea localStorage, la cookie mantiene el mismo dispositivo.
   }
 
   try {
     const encodedDevice = encodeURIComponent(btoa(JSON.stringify(device)));
-    document.cookie = `${DEVICE_COOKIE_KEY}=${encodedDevice}; max-age=31536000; path=/; samesite=strict; secure`;
+    const secureAttribute = location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `${DEVICE_COOKIE_KEY}=${encodedDevice}; Max-Age=31536000; Path=/; SameSite=Strict${secureAttribute}`;
   } catch {
     // En entornos locales sin cookie segura, localStorage sigue siendo la fuente principal.
   }
@@ -516,6 +546,9 @@ async function loadAccessAccount() {
 function renderAccessAccount() {
   const input = document.querySelector("#access-username");
   if (input) input.value = state.accessAccount?.username || "";
+
+  const summary = document.querySelector("#access-username-summary");
+  if (summary) summary.textContent = state.accessAccount?.username || "-";
 }
 
 function renderDevices() {
@@ -645,6 +678,22 @@ async function saveAccessUsername() {
   }
 }
 
+function openAccessEditor() {
+  clearMessage("#account-message");
+  document.querySelector("#access-account-editor")?.classList.remove("hidden");
+  document.querySelector("#edit-access-account")?.classList.add("hidden");
+}
+
+function closeAccessEditor() {
+  clearMessage("#account-message");
+  document.querySelector("#access-account-editor")?.classList.add("hidden");
+  document.querySelector("#edit-access-account")?.classList.remove("hidden");
+  const passwordInput = document.querySelector("#access-password");
+  const repeatInput = document.querySelector("#access-password-repeat");
+  if (passwordInput) passwordInput.value = "";
+  if (repeatInput) repeatInput.value = "";
+}
+
 async function changeAccessPassword() {
   clearMessage("#account-message");
   const password = document.querySelector("#access-password")?.value || "";
@@ -662,7 +711,6 @@ async function changeAccessPassword() {
 
   try {
     setButtonBusy("#change-access-password", true, "Guardando...");
-    await verifyAdminDeviceForSecurityAction();
     const { error } = await supabaseClient.auth.updateUser({ password });
     if (error) throw new Error(error.message);
 
@@ -674,12 +722,6 @@ async function changeAccessPassword() {
   } finally {
     setButtonBusy("#change-access-password", false);
   }
-}
-
-async function verifyAdminDeviceForSecurityAction() {
-  const { data, error } = await supabaseClient.rpc("app_is_admin");
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("No autorizado");
 }
 
 function deviceStatusLabel(status) {
@@ -718,6 +760,14 @@ function setupEvents() {
   document
     .querySelector("#change-access-password")
     ?.addEventListener("click", changeAccessPassword);
+
+  document
+    .querySelector("#edit-access-account")
+    ?.addEventListener("click", openAccessEditor);
+
+  document
+    .querySelector("#close-access-editor")
+    ?.addEventListener("click", closeAccessEditor);
 
   document.querySelectorAll("[data-merchandise-mode]").forEach((button) => {
     button.addEventListener("click", () => setMerchandiseMode(button.dataset.merchandiseMode));

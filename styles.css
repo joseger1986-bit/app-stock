@@ -383,6 +383,22 @@ th {
   margin: 0;
 }
 
+.account-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.account-current-user {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.account-current-user strong {
+  color: var(--ink);
+}
+
 .account-form {
   grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr) minmax(180px, 1fr) auto;
   align-items: end;
@@ -397,6 +413,11 @@ th {
 
 .account-actions .secondary-action {
   white-space: nowrap;
+}
+
+.account-close-actions {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
 }
 
 .mode-switch {
@@ -1574,6 +1595,22 @@ th {
     margin-bottom: 10px;
   }
 
+  #screen-dispositivos .account-summary {
+    gap: 8px;
+  }
+
+  #screen-dispositivos .account-summary .secondary-action {
+    width: auto;
+    min-height: 36px;
+    padding: 0 12px;
+    white-space: nowrap;
+  }
+
+  #screen-dispositivos .account-current-user {
+    margin-top: 3px;
+    font-size: 0.88rem;
+  }
+
   #screen-dispositivos .account-panel h3 {
     font-size: 1rem;
   }
@@ -1597,6 +1634,10 @@ th {
 
   #screen-dispositivos .account-actions .secondary-action {
     min-height: 36px;
+  }
+
+  #screen-dispositivos .account-close-actions {
+    grid-column: 1 / -1;
   }
 
   #screen-dispositivos .table-wrap {
