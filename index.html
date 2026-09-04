@@ -58,7 +58,7 @@
       <button class="nav-item" data-screen="transferencias" type="button">Transferencias</button>
       <button class="nav-item" data-screen="remitos" type="button">Remitos</button>
       <button class="nav-item" data-screen="locales" type="button">Locales</button>
-      <button class="nav-item admin-only hidden" data-screen="dispositivos" type="button">Dispositivos</button>
+      <button class="nav-item admin-only hidden" data-screen="dispositivos" type="button">Dispositivos<span class="nav-pending-dot hidden" id="devices-nav-pending" aria-label="Solicitudes pendientes"></span></button>
       <button class="nav-item" id="logout-button" type="button">Cerrar sesión</button>
     </nav>
 
@@ -433,7 +433,6 @@
             <p class="eyebrow">Seguridad</p>
             <h2 id="dispositivos-title">Dispositivos</h2>
           </div>
-          <button class="secondary-action" id="refresh-devices" type="button">Actualizar</button>
         </div>
 
         <div class="work-panel account-panel">

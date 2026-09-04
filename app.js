@@ -36,6 +36,7 @@ const DEFAULT_STATE = {
 
 let supabaseClient = null;
 let state = { ...DEFAULT_STATE };
+let devicesAutoRefreshTimer = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   setupNavigation();
@@ -53,6 +54,14 @@ function setupNavigation() {
 
   window.addEventListener("popstate", () => {
     showScreen(getScreenFromLocation(), { push: false });
+  });
+
+  window.addEventListener("focus", () => {
+    refreshDevicesAutomatically();
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshDevicesAutomatically();
   });
 
   if (!location.hash) {
@@ -226,6 +235,7 @@ async function logout() {
     remitos: [],
     transferItems: []
   };
+  stopDevicesAutoRefresh();
   showLoginScreen();
 }
 
@@ -255,6 +265,9 @@ async function verifyCurrentDevice() {
     if (state.isAdmin) {
       await loadAccessAccount();
       await loadDevices();
+      startDevicesAutoRefresh();
+    } else {
+      stopDevicesAutoRefresh();
     }
   } catch (error) {
     showLoginScreen();
@@ -306,6 +319,7 @@ function showLoginScreen() {
   document.querySelector("#app-shell")?.classList.add("hidden");
   document.querySelector("#device-pending")?.classList.add("hidden");
   document.querySelectorAll(".admin-only").forEach((item) => item.classList.add("hidden"));
+  updateDevicesPendingIndicator();
 }
 
 function showPendingDevice(status) {
@@ -327,6 +341,7 @@ function showAuthenticatedApp() {
   document.querySelectorAll(".admin-only").forEach((item) => {
     item.classList.toggle("hidden", !state.isAdmin);
   });
+  updateDevicesPendingIndicator();
   if (!state.isAdmin && getScreenFromLocation() === "dispositivos") {
     history.replaceState({ screen: "stock" }, "", "#stock");
   }
@@ -385,6 +400,37 @@ async function loadDevices() {
 
   state.devices = data || [];
   renderDevices();
+  updateDevicesPendingIndicator();
+}
+
+function startDevicesAutoRefresh() {
+  if (devicesAutoRefreshTimer || !state.isAdmin) return;
+  devicesAutoRefreshTimer = window.setInterval(refreshDevicesAutomatically, 15000);
+}
+
+function stopDevicesAutoRefresh() {
+  if (!devicesAutoRefreshTimer) return;
+  window.clearInterval(devicesAutoRefreshTimer);
+  devicesAutoRefreshTimer = null;
+}
+
+async function refreshDevicesAutomatically() {
+  if (!state.isAdmin || !supabaseClient || document.hidden) return;
+
+  const { data, error } = await supabaseClient.rpc("app_list_devices");
+  if (error) return;
+
+  state.devices = data || [];
+  renderDevices();
+  updateDevicesPendingIndicator();
+}
+
+function updateDevicesPendingIndicator() {
+  const dot = document.querySelector("#devices-nav-pending");
+  if (!dot) return;
+
+  const hasPendingDevices = state.isAdmin && state.devices.some((device) => device.estado === "pendiente");
+  dot.classList.toggle("hidden", !hasPendingDevices);
 }
 
 async function loadAccessAccount() {
@@ -423,13 +469,13 @@ function renderDevices() {
   }
 
   tbody.innerHTML = state.devices.map((device) => `
-    <tr>
+    <tr class="${device.estado === "pendiente" ? "device-row-pending" : ""}">
       <td>
         <input class="device-name-input" type="text" value="${escapeHtml(device.nombre || "")}" placeholder="Dispositivo nuevo" data-device-name="${device.id}">
       </td>
       <td>${escapeHtml(getDeviceUserLabel(device))}</td>
       <td>${escapeHtml(formatDateTime(device.fecha_solicitud))}</td>
-      <td><span class="status-badge status-${escapeHtml(device.estado)}">${escapeHtml(deviceStatusLabel(device.estado))}</span></td>
+      <td>${device.estado === "pendiente" ? '<span class="pending-dot" aria-label="Solicitud pendiente"></span>' : ""}<span class="status-badge status-${escapeHtml(device.estado)}">${escapeHtml(deviceStatusLabel(device.estado))}</span></td>
       <td>${escapeHtml(formatDateTime(device.ultimo_acceso) || "-")}</td>
       <td>
         <div class="table-actions">
@@ -452,10 +498,10 @@ function renderDevices() {
 
 function renderDeviceCard(device) {
   return `
-    <article class="device-card">
+    <article class="device-card ${device.estado === "pendiente" ? "device-card-pending" : ""}">
       <div class="device-card-head">
         <input class="device-name-input" type="text" value="${escapeHtml(device.nombre || "")}" placeholder="Dispositivo nuevo" data-device-name="${device.id}">
-        <span class="status-badge status-${escapeHtml(device.estado)}">${escapeHtml(deviceStatusLabel(device.estado))}</span>
+        <span class="device-card-status">${device.estado === "pendiente" ? '<span class="pending-dot" aria-label="Solicitud pendiente"></span>' : ""}<span class="status-badge status-${escapeHtml(device.estado)}">${escapeHtml(deviceStatusLabel(device.estado))}</span></span>
       </div>
       <div class="device-card-meta">
         <span>Usuario: ${escapeHtml(getDeviceUserLabel(device))}</span>
@@ -590,10 +636,6 @@ function setupEvents() {
   document
     .querySelector("#update-device-name")
     ?.addEventListener("click", updatePendingDeviceName);
-
-  document
-    .querySelector("#refresh-devices")
-    ?.addEventListener("click", loadDevices);
 
   document
     .querySelector("#save-access-username")
