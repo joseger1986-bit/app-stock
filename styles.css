@@ -894,8 +894,25 @@ th {
   }
 
   .topbar {
-    gap: 8px;
-    padding: 12px 14px;
+    gap: 6px;
+    padding: 9px 12px;
+  }
+
+  .topbar .eyebrow {
+    margin-bottom: 2px;
+    font-size: 0.68rem;
+  }
+
+  .topbar h1 {
+    font-size: 1.35rem;
+  }
+
+  .connection.ok {
+    display: none;
+  }
+
+  .connection.error {
+    display: inline-flex;
   }
 
   .main-nav {
@@ -945,7 +962,7 @@ th {
 
   #screen-stock .check {
     grid-column: 1 / 2;
-    min-height: 28px;
+    min-height: 34px;
     gap: 6px;
     font-size: 0.86rem;
   }
@@ -957,12 +974,12 @@ th {
 
   #screen-stock .stock-mobile-sort {
     display: inline-grid;
-    gap: 4px;
-    width: min(156px, 50%);
-    margin: -34px 0 8px auto;
+    width: calc(50% - 4px);
+    margin: -40px 0 6px auto;
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: 0;
     font-weight: 700;
+    line-height: 0;
   }
 
   #screen-stock .stock-mobile-sort select {
@@ -974,6 +991,7 @@ th {
     color: var(--ink);
     background: var(--panel);
     font-size: 0.88rem;
+    line-height: normal;
   }
 
   #screen-stock .message {
