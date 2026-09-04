@@ -767,6 +767,10 @@ th {
   display: none;
 }
 
+.remito-cards {
+  display: none;
+}
+
 .line-quantity {
   width: 96px;
   min-height: 38px;
@@ -891,6 +895,14 @@ th {
 }
 
 .mobile-label {
+  display: none;
+}
+
+.mobile-date-filter {
+  display: contents;
+}
+
+.mobile-date-filter span {
   display: none;
 }
 
@@ -1394,6 +1406,122 @@ th {
 
   #screen-mercaderia #save-merchandise {
     grid-column: 1 / -1;
+  }
+
+  #screen-remitos .section-head {
+    margin-bottom: 8px;
+  }
+
+  #screen-remitos .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    margin-bottom: 8px;
+  }
+
+  #screen-remitos .filters input[type="search"] {
+    grid-column: 1 / -1;
+  }
+
+  #screen-remitos .mobile-date-filter {
+    display: grid;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  #screen-remitos .mobile-date-filter span {
+    display: inline;
+  }
+
+  #screen-remitos .filters input {
+    min-height: 36px;
+    padding: 6px 8px;
+    font-size: 0.9rem;
+  }
+
+  #screen-remitos .table-wrap {
+    display: none;
+  }
+
+  #screen-remitos .remito-cards {
+    display: grid;
+    gap: 8px;
+  }
+
+  .remito-card {
+    display: grid;
+    gap: 7px;
+    padding: 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+
+  .remito-card-main {
+    display: grid;
+    gap: 5px;
+    width: 100%;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .remito-card-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .remito-card-top strong {
+    overflow: hidden;
+    color: var(--ink);
+    font-size: 0.98rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .remito-card-top span {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 0.84rem;
+  }
+
+  .remito-card-route {
+    display: grid;
+    gap: 2px;
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.25;
+  }
+
+  .remito-card-summary {
+    color: var(--brand-dark);
+    font-size: 0.88rem;
+    font-weight: 700;
+  }
+
+  .remito-card-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .remito-card-actions .row-action {
+    min-height: 34px;
+    padding: 0 6px;
+    font-size: 0.8rem;
+  }
+
+  .remito-card-empty {
+    padding: 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
   }
 
   .filters,

@@ -381,8 +381,14 @@
         </div>
         <div class="filters">
           <input id="remito-search" type="search" placeholder="Buscar remito">
-          <input id="remito-date-from" type="date" aria-label="Desde">
-          <input id="remito-date-to" type="date" aria-label="Hasta">
+          <label class="mobile-date-filter">
+            <span>Desde</span>
+            <input id="remito-date-from" type="date" aria-label="Desde">
+          </label>
+          <label class="mobile-date-filter">
+            <span>Hasta</span>
+            <input id="remito-date-to" type="date" aria-label="Hasta">
+          </label>
         </div>
         <div class="table-wrap">
           <table>
@@ -403,6 +409,7 @@
             </tbody>
           </table>
         </div>
+        <div class="remito-cards" id="remito-cards"></div>
         <div class="message" id="remitos-message" role="status"></div>
         <div class="receipt-detail hidden" id="remito-detail"></div>
       </section>

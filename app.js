@@ -2569,6 +2569,7 @@ function hideTransferReceiptActions() {
 
 function renderRemitos() {
   const tbody = document.querySelector("#remitos-table");
+  const cards = document.querySelector("#remito-cards");
   if (!tbody) return;
 
   const search = normalizeText(document.querySelector("#remito-search")?.value || "");
@@ -2587,6 +2588,7 @@ function renderRemitos() {
 
   if (!remitos.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty">No hay remitos para mostrar.</td></tr>';
+    if (cards) cards.innerHTML = '<div class="empty remito-card-empty">No hay remitos para mostrar.</div>';
     return;
   }
 
@@ -2609,12 +2611,53 @@ function renderRemitos() {
     `)
     .join("");
 
-  tbody.querySelectorAll("[data-remito-action]").forEach((button) => {
+  if (cards) {
+    cards.innerHTML = remitos.map(renderRemitoCard).join("");
+  }
+
+  document.querySelectorAll("[data-remito-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const remito = state.remitos.find((item) => item.id === button.dataset.remitoId);
       handleReceiptAction(button.dataset.remitoAction, remito, "#remito-detail");
     });
   });
+}
+
+function renderRemitoCard(remito) {
+  return `
+    <article class="remito-card" data-remito-card="${remito.id}">
+      <button class="remito-card-main" data-remito-action="view" data-remito-id="${remito.id}" type="button">
+        <span class="remito-card-top">
+          <strong>${escapeHtml(remito.numero)}</strong>
+          <span>${escapeHtml(formatDate(remito.fecha))}</span>
+        </span>
+        <span class="remito-card-route">
+          <span>${escapeHtml(remito.origen)}</span>
+          <span>→ ${escapeHtml(remito.destino)}</span>
+        </span>
+        <span class="remito-card-summary">${escapeHtml(remitoSummaryText(remito))}</span>
+      </button>
+      <div class="remito-card-actions">
+        <button class="row-action neutral" data-remito-action="view" data-remito-id="${remito.id}" type="button">Ver remito</button>
+        <button class="row-action neutral" data-remito-action="pdf" data-remito-id="${remito.id}" type="button">PDF</button>
+        <button class="row-action neutral" data-remito-action="whatsapp" data-remito-id="${remito.id}" type="button">WhatsApp</button>
+      </div>
+    </article>
+  `;
+}
+
+function remitoSummaryText(remito) {
+  const quantityByUnit = remito.detalles.reduce((summary, detail) => {
+    const unit = unitPlural(detail.unidad_stock);
+    summary[unit] = (summary[unit] || 0) + Number(detail.cantidad || 0);
+    return summary;
+  }, {});
+
+  const quantities = Object.entries(quantityByUnit)
+    .map(([unit, quantity]) => `${formatQuantity(quantity)} ${unit}`)
+    .join(" / ");
+
+  return `${remito.detalles.length} artículos${quantities ? ` · ${quantities}` : ""}`;
 }
 
 function remitoMatchesSearch(remito, search) {
