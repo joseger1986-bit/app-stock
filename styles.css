@@ -927,44 +927,57 @@ th {
   }
 
   #screen-stock .filters {
-    gap: 8px;
-    margin-bottom: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 8px;
+    margin-bottom: 6px;
   }
 
   #screen-stock .filters input,
   #screen-stock .filters select {
-    min-height: 38px;
-    padding: 7px 9px;
+    min-height: 36px;
+    padding: 6px 9px;
     font-size: 0.92rem;
   }
 
+  #screen-stock .filters input[type="search"] {
+    grid-column: 1 / -1;
+  }
+
   #screen-stock .check {
-    min-height: 34px;
-    font-size: 0.9rem;
+    grid-column: 1 / 2;
+    min-height: 28px;
+    gap: 6px;
+    font-size: 0.86rem;
+  }
+
+  #screen-stock .check input {
+    width: 16px;
+    height: 16px;
   }
 
   #screen-stock .stock-mobile-sort {
-    display: grid;
-    gap: 6px;
-    margin: -2px 0 10px;
+    display: inline-grid;
+    gap: 4px;
+    width: min(156px, 50%);
+    margin: -34px 0 8px auto;
     color: var(--muted);
-    font-size: 0.9rem;
+    font-size: 0.82rem;
     font-weight: 700;
   }
 
   #screen-stock .stock-mobile-sort select {
     width: 100%;
-    min-height: 38px;
+    min-height: 34px;
     border: 1px solid var(--line);
     border-radius: 8px;
-    padding: 7px 9px;
+    padding: 5px 8px;
     color: var(--ink);
     background: var(--panel);
-    font-size: 0.92rem;
+    font-size: 0.88rem;
   }
 
   #screen-stock .message {
-    margin-top: 8px;
+    margin-top: 6px;
   }
 
   #screen-stock .table-wrap {
@@ -973,13 +986,13 @@ th {
 
   #screen-stock .stock-cards {
     display: grid;
-    gap: 8px;
+    gap: 7px;
   }
 
   .stock-card {
     display: grid;
-    gap: 6px;
-    padding: 10px 12px;
+    gap: 5px;
+    padding: 9px 11px;
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 8px;
