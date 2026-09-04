@@ -2823,9 +2823,11 @@ function updateStockOperationButton() {
   if (!button) return;
   if (button.disabled) return;
 
-  button.textContent = getStockOperation() === "subtract"
-    ? "Confirmar resta"
-    : "Confirmar ingreso";
+  const isSubtract = getStockOperation() === "subtract";
+  const isMobile = window.matchMedia("(max-width: 820px)").matches;
+  button.textContent = isMobile
+    ? (isSubtract ? "Quitar" : "Agregar")
+    : (isSubtract ? "Confirmar resta" : "Confirmar ingreso");
 }
 
 function setButtonBusy(selector, isBusy, busyText) {
