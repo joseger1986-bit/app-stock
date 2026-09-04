@@ -658,6 +658,10 @@ function setupEvents() {
     ?.addEventListener("click", openProductEdit);
 
   document
+    .querySelector("#duplicate-product")
+    ?.addEventListener("click", duplicateSelectedProduct);
+
+  document
     .querySelector("#save-product-edit")
     ?.addEventListener("click", saveProductEdit);
 
@@ -708,6 +712,10 @@ function setupEvents() {
   document.querySelectorAll("[data-stock-sort]").forEach((button) => {
     button.addEventListener("click", () => setStockSort(button.dataset.stockSort));
   });
+
+  document
+    .querySelector("#stock-mobile-sort")
+    ?.addEventListener("change", setStockMobileSort);
 
   [
     "#transfer-origin",
@@ -1085,6 +1093,7 @@ function renderProductSuggestion(product) {
 function renderMerchandiseProductSummary() {
   const summary = document.querySelector("#merchandise-product-summary");
   const editButton = document.querySelector("#edit-product");
+  const duplicateButton = document.querySelector("#duplicate-product");
   if (!summary) return;
 
   const product = getSelectedMerchandiseProduct();
@@ -1093,11 +1102,13 @@ function renderMerchandiseProductSummary() {
     summary.classList.add("hidden");
     summary.innerHTML = "";
     editButton?.classList.add("hidden");
+    duplicateButton?.classList.add("hidden");
     return;
   }
 
   summary.classList.remove("hidden");
   editButton?.classList.remove("hidden");
+  duplicateButton?.classList.remove("hidden");
   const brand = product.marcas?.nombre || "";
   const category = product.categorias?.nombre || "";
   const unit = getProductUnit(product);
@@ -1115,6 +1126,27 @@ function updateMerchandiseQuantityLabel() {
   if (!label) return;
 
   label.textContent = "Cantidad";
+}
+
+function duplicateSelectedProduct() {
+  const product = getSelectedMerchandiseProduct();
+  if (!product) return;
+
+  setMerchandiseMode("new");
+
+  document.querySelector("#merchandise-product-name").value = product.nombre || "";
+  document.querySelector("#merchandise-product-category").value = product.categoria_id || "";
+  document.querySelector("#merchandise-product-brand").value = product.marcas?.nombre || "";
+  document.querySelector("#merchandise-unit").value = getProductUnit(product);
+  document.querySelector("#merchandise-cost").value = product.costo ?? "";
+  document.querySelector("#merchandise-price").value = product.precio_venta ?? "";
+  document.querySelector("#merchandise-min-stock").value = product.stock_minimo ?? "";
+  document.querySelector("#merchandise-quantity").value = "";
+
+  updateCategoryActionState();
+  updateMerchandiseQuantityLabel();
+  document.querySelector("#merchandise-product-name")?.focus();
+  showMessage("#merchandise-message", "Producto duplicado en el formulario. Revisá los datos y cargá la cantidad antes de crear.", "ok");
 }
 
 async function saveMerchandise() {
@@ -2052,8 +2084,24 @@ function setStockSort(field) {
   renderStockTable();
 }
 
+function setStockMobileSort() {
+  const value = document.querySelector("#stock-mobile-sort")?.value || "articulo:asc";
+  const [field, direction] = value.split(":");
+  state.stockSort = {
+    field,
+    direction
+  };
+
+  renderStockTable();
+}
+
 function renderStockSortHeaders() {
   const sort = state.stockSort || DEFAULT_STATE.stockSort;
+  const mobileSort = document.querySelector("#stock-mobile-sort");
+
+  if (mobileSort && sort.field) {
+    mobileSort.value = `${sort.field}:${sort.direction}`;
+  }
 
   document.querySelectorAll("[data-stock-sort]").forEach((button) => {
     const isActive = button.dataset.stockSort === sort.field;

@@ -264,6 +264,10 @@ textarea {
   display: none;
 }
 
+.stock-mobile-sort {
+  display: none;
+}
+
 table {
   width: 100%;
   min-width: 760px;
@@ -514,6 +518,12 @@ th {
 
 .product-summary strong {
   color: var(--ink);
+}
+
+.product-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .excel-preview {
@@ -933,6 +943,26 @@ th {
     font-size: 0.9rem;
   }
 
+  #screen-stock .stock-mobile-sort {
+    display: grid;
+    gap: 6px;
+    margin: -2px 0 10px;
+    color: var(--muted);
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
+  #screen-stock .stock-mobile-sort select {
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 7px 9px;
+    color: var(--ink);
+    background: var(--panel);
+    font-size: 0.92rem;
+  }
+
   #screen-stock .message {
     margin-top: 8px;
   }
@@ -1010,6 +1040,25 @@ th {
   .category-actions,
   .category-inline-form {
     flex-direction: column;
+  }
+
+  #new-product-section .category-manager {
+    gap: 6px;
+  }
+
+  #new-product-section .category-actions,
+  #new-product-section .category-inline-form {
+    gap: 6px;
+  }
+
+  #new-product-section .category-inline-form input,
+  #new-product-section .category-inline-form .secondary-action {
+    min-height: 36px;
+    padding: 7px 9px;
+  }
+
+  #new-product-section .category-inline-form .secondary-action {
+    width: auto;
   }
 
   .filters input[type="search"],

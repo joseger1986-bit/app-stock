@@ -85,6 +85,17 @@
             Mostrar inactivos
           </label>
         </div>
+        <label class="stock-mobile-sort">
+          Ordenar
+          <select id="stock-mobile-sort">
+            <option value="articulo:asc">Nombre A-Z</option>
+            <option value="articulo:desc">Nombre Z-A</option>
+            <option value="categoria:asc">Categoría A-Z</option>
+            <option value="categoria:desc">Categoría Z-A</option>
+            <option value="marca:asc">Marca A-Z</option>
+            <option value="marca:desc">Marca Z-A</option>
+          </select>
+        </label>
         <div class="message" id="stock-message" role="status"></div>
 
         <div class="table-wrap">
@@ -145,7 +156,10 @@
               </div>
               <div class="suggestions-list" id="merchandise-suggestions"></div>
               <div class="product-summary hidden" id="merchandise-product-summary"></div>
-              <button class="secondary-action hidden" id="edit-product" type="button">Editar producto</button>
+              <div class="product-actions">
+                <button class="secondary-action hidden" id="edit-product" type="button">Editar producto</button>
+                <button class="secondary-action hidden" id="duplicate-product" type="button">Duplicar producto</button>
+              </div>
               <div class="edit-panel hidden" id="edit-product-panel">
                 <label>
                   Nombre del artículo
