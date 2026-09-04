@@ -41,6 +41,7 @@ let state = { ...DEFAULT_STATE };
 let devicesAutoRefreshTimer = null;
 
 document.addEventListener("DOMContentLoaded", () => {
+  requestPersistentDeviceStorage();
   setupNavigation();
   setupTransferDate();
   setupSupabase();
@@ -368,7 +369,10 @@ function showAuthenticatedApp() {
 
 function ensureStoredDevice() {
   const existing = getStoredDeviceCandidates()[0];
-  if (existing) return existing;
+  if (existing) {
+    saveStoredDevice(existing);
+    return existing;
+  }
 
   const device = createStoredDevice();
   saveStoredDevice(device);
@@ -432,6 +436,8 @@ function readStoredDeviceFromCookie() {
 }
 
 function saveStoredDevice(device) {
+  if (!isValidStoredDevice(device)) return;
+
   try {
     localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify(device));
     localStorage.setItem(DEVICE_BACKUP_STORAGE_KEY, JSON.stringify(device));
@@ -446,6 +452,11 @@ function saveStoredDevice(device) {
   } catch {
     // En entornos locales sin cookie segura, localStorage sigue siendo la fuente principal.
   }
+}
+
+function requestPersistentDeviceStorage() {
+  if (!navigator.storage?.persist) return;
+  navigator.storage.persist().catch(() => {});
 }
 
 function isValidStoredDevice(device) {
