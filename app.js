@@ -234,7 +234,7 @@ async function verifyCurrentDevice() {
 
   const device = ensureStoredDevice();
   state.device = device;
-  refreshSupabaseClientWithDevice();
+  await refreshSupabaseClientWithDevice();
 
   try {
     let status = await fetchCurrentDeviceStatus(device);
@@ -361,10 +361,17 @@ function generateDeviceSecret() {
   return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function refreshSupabaseClientWithDevice() {
+async function refreshSupabaseClientWithDevice() {
   const config = window.APP_CONFIG || {};
   if (!config.supabaseUrl || !config.supabaseAnonKey || !window.supabase) return;
+  const currentSession = state.session;
   supabaseClient = createSupabaseClient(config);
+  if (currentSession?.access_token && currentSession?.refresh_token) {
+    await supabaseClient.auth.setSession({
+      access_token: currentSession.access_token,
+      refresh_token: currentSession.refresh_token
+    });
+  }
 }
 
 async function loadDevices() {
