@@ -1,6 +1,7 @@
 const DEPOSITO_MINORISTA = "Depósito Minorista";
 const DEFAULT_UNIT = "unidad";
 const DEVICE_STORAGE_KEY = "app_stock_device";
+const DEVICE_COOKIE_KEY = "app_stock_device";
 
 const DEFAULT_STATE = {
   categorias: [],
@@ -353,21 +354,87 @@ function ensureStoredDevice() {
   if (existing) return existing;
 
   const device = {
-    id: crypto.randomUUID(),
+    id: generateDeviceId(),
     secret: generateDeviceSecret()
   };
-  localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify(device));
+  saveStoredDevice(device);
   return device;
 }
 
 function getStoredDevice() {
+  const localDevice = readStoredDeviceFromLocalStorage();
+  if (localDevice) {
+    saveStoredDevice(localDevice);
+    return localDevice;
+  }
+
+  const cookieDevice = readStoredDeviceFromCookie();
+  if (cookieDevice) {
+    saveStoredDevice(cookieDevice);
+    return cookieDevice;
+  }
+
+  return null;
+}
+
+function readStoredDeviceFromLocalStorage() {
   try {
     const device = JSON.parse(localStorage.getItem(DEVICE_STORAGE_KEY) || "null");
-    if (device?.id && device?.secret) return device;
+    if (isValidStoredDevice(device)) return device;
   } catch {
     return null;
   }
   return null;
+}
+
+function readStoredDeviceFromCookie() {
+  try {
+    const cookie = document.cookie
+      .split("; ")
+      .find((item) => item.startsWith(`${DEVICE_COOKIE_KEY}=`));
+    if (!cookie) return null;
+
+    const rawValue = cookie.slice(DEVICE_COOKIE_KEY.length + 1);
+    const device = JSON.parse(atob(decodeURIComponent(rawValue)));
+    if (isValidStoredDevice(device)) return device;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function saveStoredDevice(device) {
+  try {
+    localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify(device));
+  } catch {
+    // Si el navegador bloquea localStorage, la cookie mantiene el mismo dispositivo.
+  }
+
+  try {
+    const encodedDevice = encodeURIComponent(btoa(JSON.stringify(device)));
+    document.cookie = `${DEVICE_COOKIE_KEY}=${encodedDevice}; max-age=31536000; path=/; samesite=strict; secure`;
+  } catch {
+    // En entornos locales sin cookie segura, localStorage sigue siendo la fuente principal.
+  }
+}
+
+function isValidStoredDevice(device) {
+  return Boolean(
+    device?.id
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(device.id)
+    && typeof device.secret === "string"
+    && device.secret.length >= 24
+  );
+}
+
+function generateDeviceId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function generateDeviceSecret() {
@@ -595,6 +662,7 @@ async function changeAccessPassword() {
 
   try {
     setButtonBusy("#change-access-password", true, "Guardando...");
+    await verifyAdminDeviceForSecurityAction();
     const { error } = await supabaseClient.auth.updateUser({ password });
     if (error) throw new Error(error.message);
 
@@ -606,6 +674,12 @@ async function changeAccessPassword() {
   } finally {
     setButtonBusy("#change-access-password", false);
   }
+}
+
+async function verifyAdminDeviceForSecurityAction() {
+  const { data, error } = await supabaseClient.rpc("app_is_admin");
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("No autorizado");
 }
 
 function deviceStatusLabel(status) {
