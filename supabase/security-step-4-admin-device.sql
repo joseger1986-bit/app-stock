@@ -17,8 +17,8 @@ declare
   v_admin_device_id uuid;
   v_matches integer;
 begin
-  select count(*), min(d.id)
-    into v_matches, v_admin_device_id
+  select count(*)
+    into v_matches
   from dispositivos_autorizados d
   where d.id::text like '197bfd3f%';
 
@@ -30,8 +30,21 @@ begin
     raise exception 'Hay mas de un dispositivo cuyo id empieza con 197bfd3f. Usar el UUID completo.';
   end if;
 
+  select d.id
+    into v_admin_device_id
+  from dispositivos_autorizados d
+  where d.id::text like '197bfd3f%'
+  order by d.id::text
+  limit 1;
+
   update dispositivos_autorizados d
-  set es_admin = (d.id = v_admin_device_id);
+  set es_admin = false
+  where d.es_admin = true
+    and d.id <> v_admin_device_id;
+
+  update dispositivos_autorizados d
+  set es_admin = true
+  where d.id = v_admin_device_id;
 
   update dispositivos_autorizados d
   set
