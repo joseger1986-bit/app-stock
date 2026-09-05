@@ -1,5 +1,6 @@
 const DEPOSITO_MINORISTA = "Depósito Minorista";
 const DEFAULT_UNIT = "unidad";
+const DEFAULT_SCREEN = "transferencias";
 const DEVICE_STORAGE_KEY = "app_stock_device";
 const DEVICE_BACKUP_STORAGE_KEY = "app_stock_device_backup";
 const DEVICE_COOKIE_KEY = "app_stock_device";
@@ -68,7 +69,7 @@ function setupNavigation() {
   });
 
   if (!location.hash) {
-    history.replaceState({ screen: "stock" }, "", "#stock");
+    history.replaceState({ screen: DEFAULT_SCREEN }, "", `#${DEFAULT_SCREEN}`);
   }
 }
 
@@ -77,8 +78,8 @@ function navigateToScreen(target) {
 }
 
 function showScreen(target, options = {}) {
-  const requestedScreen = isValidScreen(target) ? target : "stock";
-  const screen = requestedScreen === "dispositivos" && !state.isAdmin ? "stock" : requestedScreen;
+  const requestedScreen = isValidScreen(target) ? target : DEFAULT_SCREEN;
+  const screen = requestedScreen === "dispositivos" && !state.isAdmin ? DEFAULT_SCREEN : requestedScreen;
   if (options.push && getScreenFromLocation() !== screen) {
     history.pushState({ screen }, "", `#${screen}`);
   }
@@ -99,7 +100,7 @@ function showScreen(target, options = {}) {
 
 function getScreenFromLocation() {
   const screen = location.hash.replace("#", "").replace("/", "");
-  return isValidScreen(screen) ? screen : "stock";
+  return isValidScreen(screen) ? screen : DEFAULT_SCREEN;
 }
 
 function isValidScreen(screen) {
@@ -368,9 +369,10 @@ function showAuthenticatedApp() {
   });
   updateDevicesPendingIndicator();
   if (!state.isAdmin && getScreenFromLocation() === "dispositivos") {
-    history.replaceState({ screen: "stock" }, "", "#stock");
+    history.replaceState({ screen: DEFAULT_SCREEN }, "", `#${DEFAULT_SCREEN}`);
   }
-  showScreen(getScreenFromLocation(), { push: false });
+  history.replaceState({ screen: DEFAULT_SCREEN }, "", `#${DEFAULT_SCREEN}`);
+  showScreen(DEFAULT_SCREEN, { push: false });
 }
 
 function ensureStoredDevice() {

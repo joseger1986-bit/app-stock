@@ -53,9 +53,9 @@
     </section>
 
     <nav class="main-nav hidden" id="main-nav" aria-label="Menú principal">
-      <button class="nav-item active" data-screen="stock" type="button">Stock</button>
+      <button class="nav-item" data-screen="stock" type="button">Stock</button>
       <button class="nav-item" data-screen="mercaderia" type="button">Mercadería</button>
-      <button class="nav-item" data-screen="transferencias" type="button">Transferencias</button>
+      <button class="nav-item active" data-screen="transferencias" type="button">Transferencias</button>
       <button class="nav-item" data-screen="remitos" type="button">Remitos</button>
       <button class="nav-item" data-screen="locales" type="button">Locales</button>
       <button class="nav-item admin-only hidden" data-screen="dispositivos" type="button">Dispositivos<span class="nav-pending-dot hidden" id="devices-nav-pending" aria-label="Solicitudes pendientes"></span></button>
@@ -63,7 +63,7 @@
     </nav>
 
     <main class="app-shell hidden" id="app-shell">
-      <section class="screen active" id="screen-stock" aria-labelledby="stock-title">
+      <section class="screen" id="screen-stock" aria-labelledby="stock-title">
         <div class="section-head">
           <div>
             <p class="eyebrow">Existencias</p>
@@ -305,7 +305,7 @@
         </div>
       </section>
 
-      <section class="screen" id="screen-transferencias" aria-labelledby="transferencias-title">
+      <section class="screen active" id="screen-transferencias" aria-labelledby="transferencias-title">
         <div class="section-head">
           <div>
             <p class="eyebrow">Remitos internos</p>
