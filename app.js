@@ -222,10 +222,16 @@ async function resolveLoginEmail(user) {
 
 async function logout() {
   clearMessage("#auth-message");
+  const device = state.device || getStoredDevice();
+  if (device) saveStoredDevice(device);
+
   await supabaseClient?.auth.signOut();
+
+  if (device) saveStoredDevice(device);
   state = {
     ...state,
     session: null,
+    device,
     deviceStatus: null,
     isAdmin: false,
     devices: [],
