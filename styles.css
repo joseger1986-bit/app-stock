@@ -952,7 +952,7 @@ th {
 }
 
 .pedido-work-line {
-  grid-template-columns: minmax(260px, 1fr) 130px 130px minmax(180px, 1fr) auto auto;
+  grid-template-columns: minmax(260px, 1fr) 130px minmax(180px, 1fr) auto auto;
   align-items: end;
 }
 

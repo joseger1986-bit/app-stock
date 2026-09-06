@@ -2947,12 +2947,8 @@ function renderPedidoDetailLine(detail, isPending) {
         <span>Disponible depósito: ${escapeHtml(formatQuantityWithUnit(available, detail.unidad_stock))}</span>
       </div>
       <label>
-        Cantidad real
+        A enviar
         <input type="number" min="0" step="1" value="${escapeHtml(detail.cantidad_real)}" data-pedido-real="${detail.id}" ${isPending ? "" : "disabled"}>
-      </label>
-      <label>
-        Cantidad pedida
-        <input type="number" min="1" step="1" value="${escapeHtml(detail.cantidad_pedida)}" data-pedido-requested="${detail.id}" ${isPending ? "" : "disabled"}>
       </label>
       <label class="pedido-line-note">
         Observación
@@ -3025,7 +3021,7 @@ function renderPedidoDetailProductOptions() {
     return;
   }
 
-  list.innerHTML = products.map((product) => renderPedidoSuggestion(product).replaceAll("data-select-pedido-product", "data-select-pedido-detail-product")).join("");
+  list.innerHTML = products.map(renderPedidoDetailSuggestion).join("");
   list.querySelectorAll("[data-select-pedido-detail-product]").forEach((button) => {
     button.addEventListener("click", () => {
       state.selectedPedidoDetailProductId = button.dataset.selectPedidoDetailProduct;
@@ -3033,6 +3029,22 @@ function renderPedidoDetailProductOptions() {
       updatePedidoDetailAvailable();
     });
   });
+}
+
+function renderPedidoDetailSuggestion(product) {
+  const unit = getProductUnit(product);
+  const meta = [
+    product.categorias?.nombre || "",
+    product.marcas?.nombre || "",
+    `Depósito: ${formatQuantityWithUnit(product.available, unit)}`
+  ].filter(Boolean).join(" · ");
+
+  return `
+    <button class="suggestion-button" type="button" data-select-pedido-detail-product="${product.id}">
+      <strong>${escapeHtml(product.nombre)}</strong>
+      <span class="suggestion-meta">${escapeHtml(meta)}</span>
+    </button>
+  `;
 }
 
 function updatePedidoDetailAvailable() {
@@ -3089,7 +3101,20 @@ async function addPedidoDetailItem(pedidoId) {
     return;
   }
 
+  clearPedidoDetailSelection();
   await reloadPedidosKeepingCurrent();
+}
+
+function clearPedidoDetailSelection() {
+  state.selectedPedidoDetailProductId = null;
+  const search = document.querySelector("#pedido-detail-product-search");
+  const quantity = document.querySelector("#pedido-detail-quantity");
+  const observation = document.querySelector("#pedido-detail-item-observation");
+  if (search) search.value = "";
+  if (quantity) quantity.value = "";
+  if (observation) observation.value = "";
+  renderPedidoDetailProductOptions();
+  updatePedidoDetailAvailable();
 }
 
 async function deletePedidoDetail(detailId) {
@@ -3114,7 +3139,6 @@ function syncPedidoDetailInputs() {
   pedido.observacion_general = document.querySelector("#pedido-detail-observation")?.value || "";
   pedido.detalles.forEach((detail) => {
     detail.cantidad_real = Number(document.querySelector(`[data-pedido-real="${detail.id}"]`)?.value || 0);
-    detail.cantidad_pedida = Number(document.querySelector(`[data-pedido-requested="${detail.id}"]`)?.value || 0);
     detail.observacion = document.querySelector(`[data-pedido-note="${detail.id}"]`)?.value || "";
     detail.preparado = document.querySelector(`[data-pedido-prepared="${detail.id}"]`)?.checked || false;
   });
@@ -3126,9 +3150,9 @@ async function savePedidoDetailChanges() {
   if (!pedido || pedido.estado !== "pendiente") return false;
 
   syncPedidoDetailInputs();
-  const invalid = pedido.detalles.find((detail) => detail.cantidad_pedida <= 0 || detail.cantidad_real < 0);
+  const invalid = pedido.detalles.find((detail) => detail.cantidad_real < 0);
   if (invalid) {
-    showMessage("#pedido-detail-message", "Las cantidades pedidas deben ser mayores a cero y las reales no pueden ser negativas.", "error");
+    showMessage("#pedido-detail-message", "La cantidad a enviar no puede ser negativa.", "error");
     return false;
   }
 
@@ -3147,7 +3171,6 @@ async function savePedidoDetailChanges() {
     const { error } = await supabaseClient
       .from("pedido_detalle")
       .update({
-        cantidad_pedida: detail.cantidad_pedida,
         cantidad_real: detail.cantidad_real,
         preparado: detail.preparado,
         observacion: detail.observacion || null
