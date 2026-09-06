@@ -985,12 +985,14 @@ function setupEvents() {
   });
 
   document
-    .querySelector("#add-pedido-item")
-    ?.addEventListener("click", addPedidoItem);
-
-  document
     .querySelector("#save-pedido")
     ?.addEventListener("click", saveNewPedido);
+
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest("#add-pedido-item")) return;
+    event.preventDefault();
+    addPedidoItem();
+  });
 
   document.querySelectorAll("[data-receipt-action]").forEach((button) => {
     button.addEventListener("click", () => handleReceiptAction(button.dataset.receiptAction, state.lastConfirmedTransfer));
@@ -2708,7 +2710,7 @@ function addPedidoItem() {
       unidad_stock: getProductUnit(product),
       cantidad_pedida: quantity,
       cantidad_real: quantity,
-      observacion
+      observacion: observation
     });
   }
 
