@@ -12,6 +12,7 @@ const DEFAULT_STATE = {
   productos: [],
   stock: [],
   remitos: [],
+  pedidos: [],
   devices: [],
   accessAccount: null,
   session: null,
@@ -19,9 +20,14 @@ const DEFAULT_STATE = {
   deviceStatus: null,
   isAdmin: false,
   transferItems: [],
+  pedidoItems: [],
   merchandiseMode: "existing",
+  pedidoView: "new",
   selectedMerchandiseProductId: null,
   selectedTransferProductId: null,
+  selectedPedidoProductId: null,
+  selectedPedidoDetailProductId: null,
+  currentPedidoId: null,
   lastConfirmedTransfer: null,
   isCreatingProduct: false,
   isSavingStockOperation: false,
@@ -31,6 +37,8 @@ const DEFAULT_STATE = {
   isEditingCategory: false,
   isAddingTransferItem: false,
   isConfirmingTransfer: false,
+  isSavingPedido: false,
+  isFinalizingPedido: false,
   stockSort: {
     field: "",
     direction: "asc"
@@ -243,6 +251,7 @@ async function logout() {
     productos: [],
     stock: [],
     remitos: [],
+    pedidos: [],
     transferItems: []
   };
   stopDevicesAutoRefresh();
@@ -957,6 +966,32 @@ function setupEvents() {
     .querySelector("#new-transfer")
     ?.addEventListener("click", startNewTransfer);
 
+  document.querySelectorAll("[data-pedido-view]").forEach((button) => {
+    button.addEventListener("click", () => setPedidoView(button.dataset.pedidoView));
+  });
+
+  [
+    "#pedido-destination",
+    "#pedido-product-search",
+    "#pedido-category-filter",
+    "#pedido-brand-filter"
+  ].forEach((selector) => {
+    document.querySelector(selector)?.addEventListener("input", () => {
+      state.selectedPedidoProductId = null;
+      renderPedidoProductOptions();
+      updatePedidoAvailable();
+      updatePedidoButtons();
+    });
+  });
+
+  document
+    .querySelector("#add-pedido-item")
+    ?.addEventListener("click", addPedidoItem);
+
+  document
+    .querySelector("#save-pedido")
+    ?.addEventListener("click", saveNewPedido);
+
   document.querySelectorAll("[data-receipt-action]").forEach((button) => {
     button.addEventListener("click", () => handleReceiptAction(button.dataset.receiptAction, state.lastConfirmedTransfer));
   });
@@ -972,13 +1007,14 @@ async function loadInitialData() {
     return;
   }
 
-  const [categorias, marcas, ubicaciones, productos, stock, remitos] = await Promise.all([
+  const [categorias, marcas, ubicaciones, productos, stock, remitos, pedidos] = await Promise.all([
     fetchTable("categorias"),
     fetchTable("marcas"),
     fetchTable("ubicaciones"),
     fetchProducts(),
     fetchStock(),
-    fetchRemitos()
+    fetchRemitos(),
+    fetchPedidos()
   ]);
 
   state = {
@@ -988,7 +1024,8 @@ async function loadInitialData() {
     ubicaciones,
     productos,
     stock,
-    remitos
+    remitos,
+    pedidos
   };
 
   renderAll();
@@ -1019,6 +1056,9 @@ async function fetchProducts() {
     .order("nombre", { ascending: true });
 
   if (error) {
+    if (isMissingPedidosSchemaError(error)) {
+      return [];
+    }
     setConnectionError(error.message);
     return [];
   }
@@ -1114,6 +1154,82 @@ async function fetchRemitoById(id) {
   return normalizeRemito(data);
 }
 
+async function fetchPedidos() {
+  const { data, error } = await supabaseClient
+    .from("pedidos")
+    .select(`
+      *,
+      destino:ubicaciones!pedidos_destino_id_fkey(nombre),
+      origen:ubicaciones!pedidos_origen_id_fkey(nombre),
+      transferencia:transferencias(numero),
+      pedido_detalle(
+        id,
+        cantidad_pedida,
+        cantidad_real,
+        preparado,
+        observacion,
+        productos(
+          id,
+          nombre,
+          unidad_stock,
+          activo,
+          categorias(nombre),
+          marcas(nombre)
+        )
+      )
+    `)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    setConnectionError(error.message);
+    return [];
+  }
+
+  return (data || []).map(normalizePedido);
+}
+
+function isMissingPedidosSchemaError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return error?.code === "42P01"
+    || error?.code === "PGRST205"
+    || message.includes("pedidos")
+    || message.includes("pedido_detalle");
+}
+
+async function fetchPedidoById(id) {
+  const pedidos = await fetchPedidos();
+  return pedidos.find((pedido) => pedido.id === id) || null;
+}
+
+function normalizePedido(row) {
+  return {
+    id: row.id,
+    numero: row.numero,
+    fecha_hora: row.fecha_hora,
+    estado: row.estado,
+    origen_id: row.origen_id,
+    destino_id: row.destino_id,
+    origen: row.origen?.nombre || "",
+    destino: row.destino?.nombre || "",
+    observacion_general: row.observacion_general || "",
+    creado_email: row.creado_email || "",
+    transferencia_id: row.transferencia_id || "",
+    transferencia_numero: row.transferencia?.numero || "",
+    detalles: (row.pedido_detalle || []).map((detail) => ({
+      id: detail.id,
+      producto_id: detail.productos?.id || "",
+      articulo: detail.productos?.nombre || "",
+      unidad_stock: getProductUnit(detail.productos),
+      categoria: detail.productos?.categorias?.nombre || "",
+      marca: detail.productos?.marcas?.nombre || "",
+      cantidad_pedida: Number(detail.cantidad_pedida || 0),
+      cantidad_real: Number(detail.cantidad_real || 0),
+      preparado: Boolean(detail.preparado),
+      observacion: detail.observacion || ""
+    }))
+  };
+}
+
 function normalizeRemito(row) {
   return {
     id: row.id,
@@ -1143,6 +1259,8 @@ function renderAll() {
   renderStockTable();
   renderTransferProductOptions();
   renderTransferItems();
+  renderPedidos();
+  renderPedidoProductOptions();
   renderRemitos();
   renderDevices();
   updateMerchandiseQuantityLabel();
@@ -1150,6 +1268,8 @@ function renderAll() {
   updateStockOperationButton();
   updateTransferAvailable();
   updateConfirmTransferButton();
+  updatePedidoAvailable();
+  updatePedidoButtons();
 }
 
 function renderSelects() {
@@ -1159,11 +1279,33 @@ function renderSelects() {
   fillSelect("#transfer-destination", state.ubicaciones, "Elegir destino");
   fillSelect("#transfer-category-filter", state.categorias, "Todas las categorías");
   fillSelect("#transfer-brand-filter", state.marcas, "Todas las marcas");
+  fillSelect("#pedido-category-filter", state.categorias, "Todas las categorías");
+  fillSelect("#pedido-brand-filter", state.marcas, "Todas las marcas");
+  fillPedidoDestinationSelect();
   fillSelect("#merchandise-category-filter", state.categorias, "Todas las categorías");
   fillSelect("#merchandise-brand-filter", state.marcas, "Todas las marcas");
   fillSelect("#merchandise-product-category", state.categorias, "Sin categoría");
   fillSelect("#edit-product-category", state.categorias, "Sin categoría");
   updateCategoryActionState();
+}
+
+function fillPedidoDestinationSelect() {
+  const select = document.querySelector("#pedido-destination");
+  if (!select) return;
+
+  const currentValue = select.value;
+  select.innerHTML = "";
+  select.append(new Option("Elegir local destino", ""));
+
+  state.ubicaciones
+    .filter((item) => item.activo !== false && item.nombre !== DEPOSITO_MINORISTA)
+    .forEach((item) => {
+      select.append(new Option(item.nombre, item.id));
+    });
+
+  if ([...select.options].some((option) => option.value === currentValue)) {
+    select.value = currentValue;
+  }
 }
 
 function setDefaultTransferOrigin() {
@@ -2354,6 +2496,725 @@ function compareStockRows(a, b) {
   }
 
   return 0;
+}
+
+function setPedidoView(view) {
+  state.pedidoView = view;
+  state.currentPedidoId = null;
+  clearMessage("#pedido-message");
+  document.querySelector("#pedido-detail")?.classList.add("hidden");
+
+  document.querySelectorAll("[data-pedido-view]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.pedidoView === view);
+  });
+
+  document.querySelector("#pedido-new-view")?.classList.toggle("hidden", view !== "new");
+  document.querySelector("#pedido-pending-view")?.classList.toggle("hidden", view !== "pending");
+  document.querySelector("#pedido-history-view")?.classList.toggle("hidden", view !== "history");
+  renderPedidos();
+}
+
+function renderPedidos() {
+  renderPedidoLists();
+  renderPedidoItems();
+  renderPedidoDetail();
+}
+
+function renderPedidoLists() {
+  renderPedidoList("#pending-pedidos-list", "pendiente");
+  renderPedidoList("#history-pedidos-list", "finalizado");
+}
+
+function renderPedidoList(selector, status) {
+  const list = document.querySelector(selector);
+  if (!list) return;
+
+  const pedidos = state.pedidos
+    .filter((pedido) => pedido.estado === status)
+    .sort((a, b) => String(b.fecha_hora).localeCompare(String(a.fecha_hora)));
+
+  if (!pedidos.length) {
+    list.innerHTML = `<div class="empty pedido-empty">No hay pedidos ${status === "pendiente" ? "pendientes" : "finalizados"}.</div>`;
+    return;
+  }
+
+  list.innerHTML = pedidos.map(renderPedidoCard).join("");
+  list.querySelectorAll("[data-open-pedido]").forEach((button) => {
+    button.addEventListener("click", () => openPedido(button.dataset.openPedido));
+  });
+  list.querySelectorAll("[data-pedido-receipt]").forEach((button) => {
+    button.addEventListener("click", () => handlePedidoReceiptAction(button));
+  });
+}
+
+function renderPedidoCard(pedido) {
+  return `
+    <article class="pedido-card">
+      <button class="pedido-card-main" type="button" data-open-pedido="${pedido.id}">
+        <span class="pedido-card-top">
+          <strong>${escapeHtml(pedido.numero)}</strong>
+          <span class="status-badge status-${escapeHtml(pedido.estado)}">${escapeHtml(pedidoStatusLabel(pedido.estado))}</span>
+        </span>
+        <span>${escapeHtml(formatDateTime(pedido.fecha_hora))}</span>
+        <span>${escapeHtml(pedido.destino)}</span>
+        <span>${escapeHtml(pedidoSummaryText(pedido))}</span>
+        ${pedido.creado_email ? `<span>Creado por: ${escapeHtml(pedido.creado_email)}</span>` : ""}
+      </button>
+      ${pedido.estado === "finalizado" && pedido.transferencia_id ? `
+        <div class="pedido-card-actions">
+          <button class="row-action neutral" type="button" data-pedido-receipt="view" data-transfer-id="${pedido.transferencia_id}">Ver comprobante</button>
+          <button class="row-action neutral" type="button" data-pedido-receipt="pdf" data-transfer-id="${pedido.transferencia_id}">PDF</button>
+          <button class="row-action neutral" type="button" data-pedido-receipt="whatsapp" data-transfer-id="${pedido.transferencia_id}">WhatsApp</button>
+        </div>
+      ` : ""}
+    </article>
+  `;
+}
+
+function pedidoStatusLabel(status) {
+  return status === "finalizado" ? "Finalizado" : "Pendiente";
+}
+
+function pedidoSummaryText(pedido) {
+  const quantityByUnit = pedido.detalles.reduce((summary, detail) => {
+    const unit = unitPlural(detail.unidad_stock);
+    summary[unit] = (summary[unit] || 0) + Number(detail.cantidad_real || detail.cantidad_pedida || 0);
+    return summary;
+  }, {});
+
+  const quantities = Object.entries(quantityByUnit)
+    .map(([unit, quantity]) => `${formatQuantity(quantity)} ${unit}`)
+    .join(" / ");
+
+  return `${pedido.detalles.length} artículos${quantities ? ` · ${quantities}` : ""}`;
+}
+
+function renderPedidoProductOptions() {
+  const list = document.querySelector("#pedido-suggestions");
+  if (!list) return;
+
+  const search = normalizeText(document.querySelector("#pedido-product-search")?.value || "");
+  const categoryId = document.querySelector("#pedido-category-filter")?.value || "";
+  const brandId = document.querySelector("#pedido-brand-filter")?.value || "";
+  const deposit = getDepositLocation();
+
+  if (!search || state.selectedPedidoProductId) {
+    list.classList.add("hidden");
+    list.innerHTML = "";
+    return;
+  }
+
+  const products = getRankedProducts(search)
+    .filter((product) => product.activo !== false)
+    .filter((product) => !categoryId || product.categoria_id === categoryId)
+    .filter((product) => !brandId || product.marca_id === brandId)
+    .map((product) => ({
+      ...product,
+      available: getAvailableStock(product.id, deposit?.id || "")
+    }))
+    .slice(0, 8);
+
+  list.classList.remove("hidden");
+
+  if (!deposit) {
+    list.innerHTML = '<div class="empty">No se encontró Depósito Minorista.</div>';
+    return;
+  }
+
+  if (!products.length) {
+    list.innerHTML = '<div class="empty">No encontré productos.</div>';
+    return;
+  }
+
+  list.innerHTML = products.map(renderPedidoSuggestion).join("");
+  list.querySelectorAll("[data-select-pedido-product]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedPedidoProductId = button.dataset.selectPedidoProduct;
+      renderPedidoProductOptions();
+      updatePedidoAvailable();
+    });
+  });
+}
+
+function renderPedidoSuggestion(product) {
+  const unit = getProductUnit(product);
+  const meta = [
+    product.categorias?.nombre || "",
+    product.marcas?.nombre || "",
+    `Depósito: ${formatQuantityWithUnit(product.available, unit)}`
+  ].filter(Boolean).join(" · ");
+
+  return `
+    <button class="suggestion-button" type="button" data-select-pedido-product="${product.id}">
+      <strong>${escapeHtml(product.nombre)}</strong>
+      <span class="suggestion-meta">${escapeHtml(meta)}</span>
+    </button>
+  `;
+}
+
+function updatePedidoAvailable() {
+  const product = state.productos.find((item) => item.id === state.selectedPedidoProductId);
+  const summary = document.querySelector("#pedido-product-summary");
+  const picker = document.querySelector("#pedido-picker");
+
+  if (!product) {
+    summary?.classList.add("hidden");
+    if (summary) summary.innerHTML = "";
+    picker?.classList.add("hidden");
+    return;
+  }
+
+  const unit = getProductUnit(product);
+  const deposit = getDepositLocation();
+  const available = getAvailableStock(product.id, deposit?.id || "");
+  const meta = [product.categorias?.nombre || "", product.marcas?.nombre || ""].filter(Boolean).join(" · ");
+
+  summary?.classList.remove("hidden");
+  if (summary) {
+    summary.innerHTML = `
+      <strong>${escapeHtml(product.nombre)}</strong>
+      ${meta ? `<span>${escapeHtml(meta)}</span>` : ""}
+      <span>Disponible en Depósito Minorista: ${escapeHtml(formatQuantityWithUnit(available, unit))}</span>
+    `;
+  }
+  picker?.classList.remove("hidden");
+}
+
+function addPedidoItem() {
+  clearMessage("#pedido-message");
+  const product = state.productos.find((item) => item.id === state.selectedPedidoProductId);
+  const quantity = readNumber("#pedido-quantity", 0);
+  const observation = cleanValue("#pedido-item-observation");
+
+  if (!product) {
+    showMessage("#pedido-message", "Elegí un producto.", "error");
+    return;
+  }
+
+  if (quantity <= 0) {
+    showMessage("#pedido-message", "La cantidad debe ser mayor a cero.", "error");
+    return;
+  }
+
+  const existing = state.pedidoItems.find((item) => item.producto_id === product.id);
+  if (existing) {
+    existing.cantidad_pedida += quantity;
+    existing.cantidad_real += quantity;
+    existing.observacion = observation || existing.observacion;
+  } else {
+    state.pedidoItems.push({
+      producto_id: product.id,
+      nombre: product.nombre,
+      unidad_stock: getProductUnit(product),
+      cantidad_pedida: quantity,
+      cantidad_real: quantity,
+      observacion
+    });
+  }
+
+  clearPedidoSelection();
+  renderPedidoItems();
+  updatePedidoButtons();
+}
+
+function renderPedidoItems() {
+  const list = document.querySelector("#pedido-items");
+  if (!list) return;
+
+  if (!state.pedidoItems.length) {
+    list.innerHTML = '<div class="empty pedido-empty">Agregá artículos al pedido.</div>';
+    updatePedidoButtons();
+    return;
+  }
+
+  list.innerHTML = state.pedidoItems.map((item) => `
+    <article class="pedido-line-card">
+      <div>
+        <h3>${escapeHtml(item.nombre)}</h3>
+        <strong>${escapeHtml(formatQuantityWithUnit(item.cantidad_pedida, item.unidad_stock))}</strong>
+        ${item.observacion ? `<p>${escapeHtml(item.observacion)}</p>` : ""}
+      </div>
+      <button class="row-action" type="button" data-remove-pedido-product="${item.producto_id}">Quitar</button>
+    </article>
+  `).join("");
+
+  list.querySelectorAll("[data-remove-pedido-product]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.pedidoItems = state.pedidoItems.filter((item) => item.producto_id !== button.dataset.removePedidoProduct);
+      renderPedidoItems();
+      updatePedidoButtons();
+    });
+  });
+}
+
+function clearPedidoSelection() {
+  state.selectedPedidoProductId = null;
+  const search = document.querySelector("#pedido-product-search");
+  const quantity = document.querySelector("#pedido-quantity");
+  const observation = document.querySelector("#pedido-item-observation");
+  if (search) search.value = "";
+  if (quantity) quantity.value = "";
+  if (observation) observation.value = "";
+  renderPedidoProductOptions();
+  updatePedidoAvailable();
+}
+
+function updatePedidoButtons() {
+  const saveButton = document.querySelector("#save-pedido");
+  if (saveButton && !state.isSavingPedido) {
+    saveButton.disabled = !document.querySelector("#pedido-destination")?.value || state.pedidoItems.length === 0;
+  }
+
+  const finalizeButton = document.querySelector("#finalize-pedido");
+  if (finalizeButton && !state.isFinalizingPedido) {
+    finalizeButton.disabled = !state.currentPedidoId;
+  }
+}
+
+async function saveNewPedido() {
+  if (state.isSavingPedido) return;
+  clearMessage("#pedido-message");
+
+  const deposit = getDepositLocation();
+  const destinationId = document.querySelector("#pedido-destination")?.value || "";
+  const observation = cleanValue("#pedido-observation");
+
+  if (!deposit) {
+    showMessage("#pedido-message", "No se encontró Depósito Minorista.", "error");
+    return;
+  }
+
+  if (!destinationId) {
+    showMessage("#pedido-message", "Elegí el local destino.", "error");
+    return;
+  }
+
+  if (!state.pedidoItems.length) {
+    showMessage("#pedido-message", "Agregá al menos un artículo.", "error");
+    return;
+  }
+
+  try {
+    state.isSavingPedido = true;
+    setButtonBusy("#save-pedido", true, "Enviando...");
+
+    const { data: pedido, error: pedidoError } = await supabaseClient
+      .from("pedidos")
+      .insert({
+        origen_id: deposit.id,
+        destino_id: destinationId,
+        observacion_general: observation || null,
+        creado_email: state.session?.user?.email || null
+      })
+      .select("id")
+      .single();
+
+    if (pedidoError) throw new Error(pedidoError.message);
+
+    const { error: detailError } = await supabaseClient
+      .from("pedido_detalle")
+      .insert(state.pedidoItems.map((item) => ({
+        pedido_id: pedido.id,
+        producto_id: item.producto_id,
+        cantidad_pedida: item.cantidad_pedida,
+        cantidad_real: item.cantidad_real,
+        observacion: item.observacion || null
+      })));
+
+    if (detailError) throw new Error(detailError.message);
+
+    state.pedidoItems = [];
+    document.querySelector("#pedido-form")?.reset();
+    clearPedidoSelection();
+    await loadInitialData();
+    setPedidoView("pending");
+    showMessage("#pedido-message", "Pedido enviado correctamente.", "ok");
+  } catch (error) {
+    showMessage("#pedido-message", error.message, "error");
+  } finally {
+    state.isSavingPedido = false;
+    setButtonBusy("#save-pedido", false);
+    updatePedidoButtons();
+  }
+}
+
+function openPedido(id) {
+  state.currentPedidoId = id;
+  clearMessage("#pedido-message");
+  renderPedidoDetail();
+  document.querySelector("#pedido-detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderPedidoDetail() {
+  const container = document.querySelector("#pedido-detail");
+  if (!container) return;
+
+  const pedido = state.pedidos.find((item) => item.id === state.currentPedidoId);
+  if (!pedido) {
+    container.classList.add("hidden");
+    container.innerHTML = "";
+    return;
+  }
+
+  const isPending = pedido.estado === "pendiente";
+  const receipt = pedido.transferencia_id
+    ? state.remitos.find((remito) => remito.id === pedido.transferencia_id)
+    : null;
+
+  container.classList.remove("hidden");
+  container.innerHTML = `
+    <div class="work-panel pedido-detail-panel">
+      <div class="pedido-detail-head">
+        <div>
+          <p class="eyebrow">${escapeHtml(pedidoStatusLabel(pedido.estado))}</p>
+          <h3>${escapeHtml(pedido.numero)}</h3>
+          <p>${escapeHtml(formatDateTime(pedido.fecha_hora))} · ${escapeHtml(pedido.destino)}</p>
+        </div>
+        <button class="row-action neutral" type="button" data-close-pedido>Cerrar</button>
+      </div>
+      <label class="pedido-observation-field">
+        Observación general
+        <input id="pedido-detail-observation" type="text" value="${escapeHtml(pedido.observacion_general)}" ${isPending ? "" : "disabled"}>
+      </label>
+      ${isPending ? renderPedidoDetailAddProduct() : ""}
+      <div class="pedido-detail-lines">
+        ${pedido.detalles.map((detail) => renderPedidoDetailLine(detail, isPending)).join("")}
+      </div>
+      <div class="message" id="pedido-detail-message" role="status"></div>
+      ${isPending ? `
+        <div class="pedido-detail-actions">
+          <button class="secondary-action" id="save-pedido-detail" type="button">Guardar cambios</button>
+          <button class="primary-action" id="finalize-pedido" type="button">Finalizar pedido</button>
+        </div>
+      ` : receipt ? `
+        <div class="pedido-detail-actions">
+          <button class="secondary-action" data-pedido-detail-receipt="view" type="button">Ver comprobante</button>
+          <button class="secondary-action" data-pedido-detail-receipt="pdf" type="button">PDF</button>
+          <button class="secondary-action" data-pedido-detail-receipt="whatsapp" type="button">WhatsApp</button>
+        </div>
+        <div class="receipt-detail hidden" id="pedido-receipt-detail"></div>
+      ` : ""}
+    </div>
+  `;
+
+  container.querySelector("[data-close-pedido]")?.addEventListener("click", () => {
+    state.currentPedidoId = null;
+    renderPedidoDetail();
+  });
+
+  if (isPending) {
+    setupPedidoDetailEvents(pedido);
+  } else if (receipt) {
+    container.querySelectorAll("[data-pedido-detail-receipt]").forEach((button) => {
+      button.addEventListener("click", () => handleReceiptAction(button.dataset.pedidoDetailReceipt, receipt, "#pedido-receipt-detail"));
+    });
+  }
+}
+
+function renderPedidoDetailAddProduct() {
+  return `
+    <div class="pedido-add-inline">
+      <input id="pedido-detail-product-search" type="search" placeholder="Agregar artículo">
+      <select id="pedido-detail-category-filter" aria-label="Categoría"></select>
+      <select id="pedido-detail-brand-filter" aria-label="Marca"></select>
+      <div class="suggestions-list" id="pedido-detail-suggestions"></div>
+      <div class="product-summary hidden" id="pedido-detail-product-summary"></div>
+      <div class="pedido-picker hidden" id="pedido-detail-picker">
+        <label>
+          Cantidad
+          <input id="pedido-detail-quantity" type="number" min="1" step="1">
+        </label>
+        <label>
+          Observación
+          <input id="pedido-detail-item-observation" type="text" placeholder="Opcional">
+        </label>
+        <button class="secondary-action" id="add-pedido-detail-item" type="button">Agregar al pedido</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderPedidoDetailLine(detail, isPending) {
+  const available = getAvailableStock(detail.producto_id, getDepositLocation()?.id || "");
+  return `
+    <article class="pedido-work-line" data-pedido-detail="${detail.id}">
+      <div class="pedido-work-main">
+        <h3>${escapeHtml(detail.articulo)}</h3>
+        <span>${escapeHtml([detail.categoria, detail.marca].filter(Boolean).join(" · "))}</span>
+        <strong>Pedido: ${escapeHtml(formatQuantityWithUnit(detail.cantidad_pedida, detail.unidad_stock))}</strong>
+        <span>Disponible depósito: ${escapeHtml(formatQuantityWithUnit(available, detail.unidad_stock))}</span>
+      </div>
+      <label>
+        Cantidad real
+        <input type="number" min="0" step="1" value="${escapeHtml(detail.cantidad_real)}" data-pedido-real="${detail.id}" ${isPending ? "" : "disabled"}>
+      </label>
+      <label>
+        Cantidad pedida
+        <input type="number" min="1" step="1" value="${escapeHtml(detail.cantidad_pedida)}" data-pedido-requested="${detail.id}" ${isPending ? "" : "disabled"}>
+      </label>
+      <label class="pedido-line-note">
+        Observación
+        <input type="text" value="${escapeHtml(detail.observacion)}" data-pedido-note="${detail.id}" ${isPending ? "" : "disabled"}>
+      </label>
+      <label class="check pedido-prepared">
+        <input type="checkbox" data-pedido-prepared="${detail.id}" ${detail.preparado ? "checked" : ""} ${isPending ? "" : "disabled"}>
+        Preparado
+      </label>
+      ${isPending ? `<button class="row-action" type="button" data-delete-pedido-detail="${detail.id}">Eliminar</button>` : ""}
+    </article>
+  `;
+}
+
+function setupPedidoDetailEvents(pedido) {
+  fillSelect("#pedido-detail-category-filter", state.categorias, "Todas las categorías");
+  fillSelect("#pedido-detail-brand-filter", state.marcas, "Todas las marcas");
+
+  ["#pedido-detail-product-search", "#pedido-detail-category-filter", "#pedido-detail-brand-filter"].forEach((selector) => {
+    document.querySelector(selector)?.addEventListener("input", () => {
+      state.selectedPedidoDetailProductId = null;
+      renderPedidoDetailProductOptions();
+      updatePedidoDetailAvailable();
+    });
+  });
+
+  document.querySelector("#add-pedido-detail-item")?.addEventListener("click", () => addPedidoDetailItem(pedido.id));
+  document.querySelector("#save-pedido-detail")?.addEventListener("click", savePedidoDetailChanges);
+  document.querySelector("#finalize-pedido")?.addEventListener("click", finalizePedido);
+
+  document.querySelectorAll("[data-delete-pedido-detail]").forEach((button) => {
+    button.addEventListener("click", () => deletePedidoDetail(button.dataset.deletePedidoDetail));
+  });
+
+  renderPedidoDetailProductOptions();
+  updatePedidoDetailAvailable();
+}
+
+function renderPedidoDetailProductOptions() {
+  const list = document.querySelector("#pedido-detail-suggestions");
+  if (!list) return;
+
+  const search = normalizeText(document.querySelector("#pedido-detail-product-search")?.value || "");
+  const categoryId = document.querySelector("#pedido-detail-category-filter")?.value || "";
+  const brandId = document.querySelector("#pedido-detail-brand-filter")?.value || "";
+  const deposit = getDepositLocation();
+
+  if (!search || state.selectedPedidoDetailProductId) {
+    list.classList.add("hidden");
+    list.innerHTML = "";
+    return;
+  }
+
+  const currentPedido = state.pedidos.find((pedido) => pedido.id === state.currentPedidoId);
+  const existingIds = new Set((currentPedido?.detalles || []).map((detail) => detail.producto_id));
+  const products = getRankedProducts(search)
+    .filter((product) => product.activo !== false)
+    .filter((product) => !existingIds.has(product.id))
+    .filter((product) => !categoryId || product.categoria_id === categoryId)
+    .filter((product) => !brandId || product.marca_id === brandId)
+    .map((product) => ({
+      ...product,
+      available: getAvailableStock(product.id, deposit?.id || "")
+    }))
+    .slice(0, 8);
+
+  list.classList.remove("hidden");
+  if (!products.length) {
+    list.innerHTML = '<div class="empty">No encontré productos para agregar.</div>';
+    return;
+  }
+
+  list.innerHTML = products.map((product) => renderPedidoSuggestion(product).replaceAll("data-select-pedido-product", "data-select-pedido-detail-product")).join("");
+  list.querySelectorAll("[data-select-pedido-detail-product]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedPedidoDetailProductId = button.dataset.selectPedidoDetailProduct;
+      renderPedidoDetailProductOptions();
+      updatePedidoDetailAvailable();
+    });
+  });
+}
+
+function updatePedidoDetailAvailable() {
+  const product = state.productos.find((item) => item.id === state.selectedPedidoDetailProductId);
+  const summary = document.querySelector("#pedido-detail-product-summary");
+  const picker = document.querySelector("#pedido-detail-picker");
+
+  if (!product) {
+    summary?.classList.add("hidden");
+    if (summary) summary.innerHTML = "";
+    picker?.classList.add("hidden");
+    return;
+  }
+
+  const available = getAvailableStock(product.id, getDepositLocation()?.id || "");
+  summary?.classList.remove("hidden");
+  if (summary) {
+    summary.innerHTML = `
+      <strong>${escapeHtml(product.nombre)}</strong>
+      <span>Disponible en Depósito Minorista: ${escapeHtml(formatQuantityWithUnit(available, getProductUnit(product)))}</span>
+    `;
+  }
+  picker?.classList.remove("hidden");
+}
+
+async function addPedidoDetailItem(pedidoId) {
+  clearMessage("#pedido-detail-message");
+  const product = state.productos.find((item) => item.id === state.selectedPedidoDetailProductId);
+  const quantity = readNumber("#pedido-detail-quantity", 0);
+  const observation = cleanValue("#pedido-detail-item-observation");
+
+  if (!product) {
+    showMessage("#pedido-detail-message", "Elegí un producto.", "error");
+    return;
+  }
+
+  if (quantity <= 0) {
+    showMessage("#pedido-detail-message", "La cantidad debe ser mayor a cero.", "error");
+    return;
+  }
+
+  const { error } = await supabaseClient
+    .from("pedido_detalle")
+    .insert({
+      pedido_id: pedidoId,
+      producto_id: product.id,
+      cantidad_pedida: quantity,
+      cantidad_real: quantity,
+      observacion: observation || null
+    });
+
+  if (error) {
+    showMessage("#pedido-detail-message", error.message, "error");
+    return;
+  }
+
+  await reloadPedidosKeepingCurrent();
+}
+
+async function deletePedidoDetail(detailId) {
+  clearMessage("#pedido-detail-message");
+  const { error } = await supabaseClient
+    .from("pedido_detalle")
+    .delete()
+    .eq("id", detailId);
+
+  if (error) {
+    showMessage("#pedido-detail-message", error.message, "error");
+    return;
+  }
+
+  await reloadPedidosKeepingCurrent();
+}
+
+function syncPedidoDetailInputs() {
+  const pedido = state.pedidos.find((item) => item.id === state.currentPedidoId);
+  if (!pedido) return;
+
+  pedido.observacion_general = document.querySelector("#pedido-detail-observation")?.value || "";
+  pedido.detalles.forEach((detail) => {
+    detail.cantidad_real = Number(document.querySelector(`[data-pedido-real="${detail.id}"]`)?.value || 0);
+    detail.cantidad_pedida = Number(document.querySelector(`[data-pedido-requested="${detail.id}"]`)?.value || 0);
+    detail.observacion = document.querySelector(`[data-pedido-note="${detail.id}"]`)?.value || "";
+    detail.preparado = document.querySelector(`[data-pedido-prepared="${detail.id}"]`)?.checked || false;
+  });
+}
+
+async function savePedidoDetailChanges() {
+  clearMessage("#pedido-detail-message");
+  const pedido = state.pedidos.find((item) => item.id === state.currentPedidoId);
+  if (!pedido || pedido.estado !== "pendiente") return false;
+
+  syncPedidoDetailInputs();
+  const invalid = pedido.detalles.find((detail) => detail.cantidad_pedida <= 0 || detail.cantidad_real < 0);
+  if (invalid) {
+    showMessage("#pedido-detail-message", "Las cantidades pedidas deben ser mayores a cero y las reales no pueden ser negativas.", "error");
+    return false;
+  }
+
+  const { error: pedidoError } = await supabaseClient
+    .from("pedidos")
+    .update({ observacion_general: pedido.observacion_general || null })
+    .eq("id", pedido.id)
+    .eq("estado", "pendiente");
+
+  if (pedidoError) {
+    showMessage("#pedido-detail-message", pedidoError.message, "error");
+    return false;
+  }
+
+  for (const detail of pedido.detalles) {
+    const { error } = await supabaseClient
+      .from("pedido_detalle")
+      .update({
+        cantidad_pedida: detail.cantidad_pedida,
+        cantidad_real: detail.cantidad_real,
+        preparado: detail.preparado,
+        observacion: detail.observacion || null
+      })
+      .eq("id", detail.id);
+
+    if (error) {
+      showMessage("#pedido-detail-message", error.message, "error");
+      return false;
+    }
+  }
+
+  await reloadPedidosKeepingCurrent();
+  showMessage("#pedido-detail-message", "Cambios guardados.", "ok");
+  return true;
+}
+
+async function finalizePedido() {
+  if (state.isFinalizingPedido) return;
+  clearMessage("#pedido-detail-message");
+  const pedido = state.pedidos.find((item) => item.id === state.currentPedidoId);
+  if (!pedido || pedido.estado !== "pendiente") return;
+
+  syncPedidoDetailInputs();
+  const insufficient = pedido.detalles.find((detail) =>
+    detail.cantidad_real > getAvailableStock(detail.producto_id, getDepositLocation()?.id || "")
+  );
+
+  if (insufficient) {
+    showMessage("#pedido-detail-message", `No hay stock suficiente de ${insufficient.articulo}.`, "error");
+    return;
+  }
+
+  try {
+    state.isFinalizingPedido = true;
+    setButtonBusy("#finalize-pedido", true, "Finalizando...");
+    const saved = await savePedidoDetailChanges();
+    if (!saved) return;
+
+    const { error } = await supabaseClient.rpc("finalizar_pedido", {
+      p_pedido_id: pedido.id
+    });
+
+    if (error) throw new Error(error.message);
+
+    await loadInitialData();
+    setPedidoView("history");
+    showMessage("#pedido-message", "Pedido finalizado y remito generado correctamente.", "ok");
+  } catch (error) {
+    showMessage("#pedido-detail-message", error.message, "error");
+  } finally {
+    state.isFinalizingPedido = false;
+    setButtonBusy("#finalize-pedido", false);
+  }
+}
+
+async function reloadPedidosKeepingCurrent() {
+  state.pedidos = await fetchPedidos();
+  renderPedidos();
+}
+
+async function handlePedidoReceiptAction(button) {
+  const remito = state.remitos.find((item) => item.id === button.dataset.transferId)
+    || await fetchRemitoById(button.dataset.transferId);
+  handleReceiptAction(button.dataset.pedidoReceipt, remito, "#pedido-detail");
+}
+
+function getDepositLocation() {
+  return state.ubicaciones.find((item) => item.nombre === DEPOSITO_MINORISTA) || null;
 }
 
 function renderTransferProductOptions() {

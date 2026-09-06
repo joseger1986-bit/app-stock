@@ -56,6 +56,7 @@
       <button class="nav-item" data-screen="stock" type="button">Stock</button>
       <button class="nav-item" data-screen="mercaderia" type="button">Mercadería</button>
       <button class="nav-item active" data-screen="transferencias" type="button">Transferencias</button>
+      <button class="nav-item" data-screen="pedidos" type="button">Pedidos</button>
       <button class="nav-item" data-screen="remitos" type="button">Remitos</button>
       <button class="nav-item" data-screen="locales" type="button">Locales</button>
       <button class="nav-item admin-only hidden" data-screen="dispositivos" type="button">Dispositivos<span class="nav-pending-dot hidden" id="devices-nav-pending" aria-label="Solicitudes pendientes"></span></button>
@@ -370,6 +371,68 @@
           <div class="receipt-detail hidden" id="transfer-receipt-detail"></div>
           <button class="primary-action transfer-confirm" id="confirm-transfer" type="button" disabled>Confirmar transferencia</button>
         </div>
+      </section>
+
+      <section class="screen" id="screen-pedidos" aria-labelledby="pedidos-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Locales</p>
+            <h2 id="pedidos-title">Pedidos</h2>
+          </div>
+        </div>
+
+        <div class="mode-switch">
+          <button class="mode-button active" data-pedido-view="new" type="button">Nuevo pedido</button>
+          <button class="mode-button" data-pedido-view="pending" type="button">Pendientes</button>
+          <button class="mode-button" data-pedido-view="history" type="button">Historial</button>
+        </div>
+
+        <div class="pedido-view" id="pedido-new-view">
+          <form class="form-grid pedido-form" id="pedido-form">
+            <label>
+              Destino
+              <select id="pedido-destination"></select>
+            </label>
+            <label class="wide">
+              Observación general
+              <input id="pedido-observation" type="text" placeholder="Opcional">
+            </label>
+          </form>
+
+          <div class="work-panel pedido-work-panel">
+            <div class="filters pedido-product-filters">
+              <input id="pedido-product-search" type="search" placeholder="Buscar producto en Depósito Minorista">
+              <select id="pedido-category-filter" aria-label="Categoría"></select>
+              <select id="pedido-brand-filter" aria-label="Marca"></select>
+            </div>
+            <div class="suggestions-list" id="pedido-suggestions"></div>
+            <div class="product-summary hidden" id="pedido-product-summary"></div>
+            <div class="pedido-picker hidden" id="pedido-picker">
+              <label>
+                Cantidad
+                <input id="pedido-quantity" type="number" min="1" step="1">
+              </label>
+              <label>
+                Observación del artículo
+                <input id="pedido-item-observation" type="text" placeholder="Opcional">
+              </label>
+              <button class="secondary-action" id="add-pedido-item" type="button">Agregar</button>
+            </div>
+            <div class="pedido-items" id="pedido-items"></div>
+            <div class="message" id="pedido-message" role="status"></div>
+            <button class="primary-action transfer-confirm" id="save-pedido" type="button" disabled>Enviar pedido</button>
+          </div>
+        </div>
+
+        <div class="pedido-view hidden" id="pedido-pending-view">
+          <div class="pedido-list" id="pending-pedidos-list"></div>
+        </div>
+
+        <div class="pedido-view hidden" id="pedido-history-view">
+          <div class="pedido-list" id="history-pedidos-list"></div>
+        </div>
+
+        <div class="pedido-detail hidden" id="pedido-detail"></div>
       </section>
 
       <section class="screen" id="screen-remitos" aria-labelledby="remitos-title">
