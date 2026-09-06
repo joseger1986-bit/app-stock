@@ -2560,7 +2560,6 @@ function renderPedidoCard(pedido) {
         <span>${escapeHtml(formatDateTime(pedido.fecha_hora))}</span>
         <span>${escapeHtml(pedido.destino)}</span>
         <span>${escapeHtml(pedidoSummaryText(pedido))}</span>
-        ${pedido.creado_email ? `<span>Creado por: ${escapeHtml(pedido.creado_email)}</span>` : ""}
       </button>
       ${pedido.estado === "finalizado" && pedido.transferencia_id ? `
         <div class="pedido-card-actions">
