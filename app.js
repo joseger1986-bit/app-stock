@@ -3,6 +3,7 @@ const DEFAULT_UNIT = "unidad";
 const DEFAULT_SCREEN = "transferencias";
 const DEVICE_STORAGE_KEY = "app_stock_device";
 const DEVICE_BACKUP_STORAGE_KEY = "app_stock_device_backup";
+const DEVICE_SESSION_STORAGE_KEY = "app_stock_device_session";
 const DEVICE_COOKIE_KEY = "app_stock_device";
 
 const DEFAULT_STATE = {
@@ -237,6 +238,8 @@ async function logout() {
   await supabaseClient?.auth.signOut();
 
   if (device) saveStoredDevice(device);
+  state.session = null;
+  await refreshSupabaseClientWithDevice();
   state = {
     ...state,
     session: null,
@@ -411,6 +414,7 @@ function getStoredDevice() {
 function getStoredDeviceCandidates() {
   const devices = [
     ...readStoredDevicesFromLocalStorage(),
+    readStoredDeviceFromSessionStorage(),
     readStoredDeviceFromCookie()
   ].filter(Boolean);
 
@@ -434,6 +438,16 @@ function readStoredDevicesFromLocalStorage() {
     }
   }
   return devices;
+}
+
+function readStoredDeviceFromSessionStorage() {
+  try {
+    const device = JSON.parse(sessionStorage.getItem(DEVICE_SESSION_STORAGE_KEY) || "null");
+    if (isValidStoredDevice(device)) return device;
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function readStoredDeviceFromCookie() {
@@ -460,6 +474,12 @@ function saveStoredDevice(device) {
     localStorage.setItem(DEVICE_BACKUP_STORAGE_KEY, JSON.stringify(device));
   } catch {
     // Si el navegador bloquea localStorage, la cookie mantiene el mismo dispositivo.
+  }
+
+  try {
+    sessionStorage.setItem(DEVICE_SESSION_STORAGE_KEY, JSON.stringify(device));
+  } catch {
+    // La sesión del navegador es solo una copia extra para cierres de sesión en la misma pestaña.
   }
 
   try {
