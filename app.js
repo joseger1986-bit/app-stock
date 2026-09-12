@@ -36,6 +36,7 @@ const DEFAULT_STATE = {
   isImportingExcel: false,
   isCreatingCategory: false,
   isEditingCategory: false,
+  isDeletingProduct: false,
   isAddingTransferItem: false,
   isConfirmingTransfer: false,
   isSavingPedido: false,
@@ -910,6 +911,10 @@ function setupEvents() {
   document
     .querySelector("#cancel-product-edit")
     ?.addEventListener("click", closeProductEdit);
+
+  document
+    .querySelector("#delete-product")
+    ?.addEventListener("click", deleteSelectedProduct);
 
   document.querySelector("#merchandise-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -2308,6 +2313,48 @@ async function saveProductEdit() {
     showMessage("#merchandise-message", "Producto actualizado correctamente.", "ok");
   } catch (error) {
     showMessage("#merchandise-message", error.message, "error");
+  }
+}
+
+async function deleteSelectedProduct() {
+  if (state.isDeletingProduct) return;
+  clearMessage("#merchandise-message");
+
+  const product = getSelectedMerchandiseProduct();
+  if (!product) {
+    showMessage("#merchandise-message", "Elegí un producto existente.", "error");
+    return;
+  }
+
+  if (!window.confirm(`¿Seguro que querés eliminar ${product.nombre}?`)) return;
+
+  try {
+    state.isDeletingProduct = true;
+    setButtonBusy("#delete-product", true, "Eliminando...");
+
+    const { data, error } = await supabaseClient.rpc("eliminar_producto_seguro", {
+      p_producto_id: product.id
+    });
+
+    if (error) throw new Error(error.message);
+
+    const result = data?.[0];
+    await loadInitialData();
+    state.selectedMerchandiseProductId = null;
+    const search = document.querySelector("#merchandise-product-search");
+    const quantity = document.querySelector("#merchandise-quantity");
+    if (search) search.value = "";
+    if (quantity) quantity.value = "";
+    closeProductEdit();
+    renderMerchandiseProductOptions();
+    renderMerchandiseProductSummary();
+    updateMerchandiseQuantityLabel();
+    showMessage("#merchandise-message", result?.mensaje || "Producto eliminado correctamente.", "ok");
+  } catch (error) {
+    showMessage("#merchandise-message", error.message, "error");
+  } finally {
+    state.isDeletingProduct = false;
+    setButtonBusy("#delete-product", false);
   }
 }
 

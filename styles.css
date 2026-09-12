@@ -702,6 +702,28 @@ th {
   background: var(--panel);
 }
 
+.delete-product-zone {
+  border-top: 1px solid var(--line);
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.danger-action {
+  background: #fff5f3;
+  border: 1px solid rgba(180, 35, 24, 0.35);
+  border-radius: 8px;
+  color: var(--danger);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 10px 14px;
+}
+
+.danger-action:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .stock-operation {
   display: flex;
   gap: 10px;
