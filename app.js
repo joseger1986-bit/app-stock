@@ -2439,7 +2439,7 @@ function renderStockTable() {
     .filter((row) => !categoryId || row.productos.categoria_id === categoryId)
     .filter((row) => !brandId || row.productos.marca_id === brandId)
     .filter((row) => row.ubicacion_id === locationId)
-    .filter((row) => matchesWords(row.productos.nombre, search))
+    .filter((row) => productSearchScore(row.productos, search) > 0)
     .sort(compareStockRows);
 
   renderStockSortHeaders();
@@ -4086,15 +4086,21 @@ function getRankedProducts(normalizedSearch) {
 function productSearchScore(product, normalizedSearch) {
   if (!normalizedSearch) return 1;
 
+  const searchTerms = getSearchTerms(normalizedSearch);
+  const exactName = normalizeText(product.nombre);
+  const compactName = compactSearchText(exactName);
+  const compactSearch = compactSearchText(normalizedSearch);
+  if (exactName === normalizedSearch || compactName === compactSearch) return 1000;
+  if (exactName.startsWith(normalizedSearch) || compactName.startsWith(compactSearch)) return 900;
+  if (exactName.includes(normalizedSearch) || compactName.includes(compactSearch)) return 800;
+
   const fields = [
     { text: product.nombre, weight: 12 },
     { text: product.marcas?.nombre, weight: 8 },
     { text: product.categorias?.nombre, weight: 5 }
   ];
 
-  return normalizedSearch
-    .split(/\s+/)
-    .filter(Boolean)
+  return searchTerms
     .reduce((total, term) => {
       const best = fields.reduce((fieldBest, field) => {
         const text = normalizeText(field.text);
@@ -4103,6 +4109,9 @@ function productSearchScore(product, normalizedSearch) {
         if (text === term) return Math.max(fieldBest, field.weight + 16);
         if (text.startsWith(term)) return Math.max(fieldBest, field.weight + 12);
         if (text.includes(term)) return Math.max(fieldBest, field.weight + 8);
+        if (compactSearchText(text).includes(compactSearchText(term))) {
+          return Math.max(fieldBest, field.weight + 7);
+        }
         if (isOrderedSubsequence(term, text)) {
           return Math.max(fieldBest, field.weight + Math.max(2, 8 - text.length + term.length));
         }
@@ -4111,18 +4120,28 @@ function productSearchScore(product, normalizedSearch) {
           .split(/\s+/)
           .filter(Boolean)
           .reduce((bestToken, token) => {
-            if (token.startsWith(term) || term.startsWith(token)) {
+            const termVariants = getSearchTermVariants(term);
+            const tokenVariants = getSearchTermVariants(token);
+            if (termVariants.some((termVariant) => tokenVariants.includes(termVariant))) {
+              return Math.max(bestToken, field.weight + 10);
+            }
+
+            if (tokenVariants.some((tokenVariant) => tokenVariant.startsWith(term) || term.startsWith(tokenVariant))) {
               return Math.max(bestToken, field.weight + 6);
             }
 
-            if (isOrderedSubsequence(term, token)) {
+            if (tokenVariants.some((tokenVariant) => isOrderedSubsequence(term, tokenVariant))) {
               return Math.max(bestToken, field.weight + Math.max(2, 7 - token.length + term.length));
             }
 
-            const distance = levenshteinDistance(term, token);
-            const limit = term.length <= 4 ? 1 : 2;
-            if (distance <= limit) {
-              return Math.max(bestToken, field.weight + 4 - distance);
+            const bestDistance = Math.min(
+              ...termVariants.flatMap((termVariant) =>
+                tokenVariants.map((tokenVariant) => levenshteinDistance(termVariant, tokenVariant))
+              )
+            );
+            const limit = term.length <= 4 ? 1 : Math.max(2, Math.floor(term.length * 0.25));
+            if (bestDistance <= limit) {
+              return Math.max(bestToken, field.weight + 4 - bestDistance);
             }
 
             return bestToken;
@@ -4133,6 +4152,24 @@ function productSearchScore(product, normalizedSearch) {
 
       return best === 0 ? 0 : total + best;
     }, 0);
+}
+
+function getSearchTerms(normalizedSearch) {
+  return normalizedSearch
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function getSearchTermVariants(term) {
+  const variants = new Set([term]);
+  if (term.length > 3 && term.endsWith("es")) variants.add(term.slice(0, -2));
+  if (term.length > 2 && term.endsWith("s")) variants.add(term.slice(0, -1));
+  if (term.length > 3 && term.endsWith("z")) variants.add(`${term.slice(0, -1)}ces`);
+  return [...variants].filter(Boolean);
+}
+
+function compactSearchText(value) {
+  return normalizeText(value).replace(/\s+/g, "");
 }
 
 function isOrderedSubsequence(needle, haystack) {
@@ -4305,10 +4342,9 @@ function readNullableNumber(selector) {
 function matchesWords(text, normalizedSearch) {
   if (!normalizedSearch) return true;
   const normalizedText = normalizeText(text);
-  return normalizedSearch
-    .split(/\s+/)
-    .filter(Boolean)
-    .every((word) => normalizedText.includes(word));
+  return getSearchTerms(normalizedSearch).every((word) =>
+    getSearchTermVariants(word).some((variant) => normalizedText.includes(variant))
+  );
 }
 
 function levenshteinDistance(a, b) {
@@ -4337,7 +4373,9 @@ function normalizeText(value) {
   return String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[-_/\\.,;:()[\]{}]+/g, " ")
     .toLowerCase()
+    .replace(/\s+/g, " ")
     .trim();
 }
 
