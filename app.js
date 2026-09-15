@@ -12,6 +12,9 @@ const DEFAULT_STATE = {
   ubicaciones: [],
   productos: [],
   stock: [],
+  stockBaseFotos: [],
+  stockBaseDetalle: [],
+  stockBaseReady: false,
   remitos: [],
   pedidos: [],
   devices: [],
@@ -41,6 +44,8 @@ const DEFAULT_STATE = {
   isConfirmingTransfer: false,
   isSavingPedido: false,
   isFinalizingPedido: false,
+  isCreatingStockBase: false,
+  stockSummaryExpanded: {},
   stockSort: {
     field: "",
     direction: "asc"
@@ -981,6 +986,22 @@ function setupEvents() {
     .querySelector("#stock-mobile-sort")
     ?.addEventListener("change", setStockMobileSort);
 
+  ["#summary-location-filter", "#summary-category-filter"].forEach((selector) => {
+    document.querySelector(selector)?.addEventListener("input", renderStockSummary);
+  });
+
+  document
+    .querySelector("#create-stock-base")
+    ?.addEventListener("click", createStockBaseSnapshot);
+
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-summary-toggle]");
+    if (!button) return;
+    const key = button.dataset.summaryToggle;
+    state.stockSummaryExpanded[key] = !state.stockSummaryExpanded[key];
+    renderStockSummary();
+  });
+
   [
     "#transfer-origin",
     "#transfer-destination",
@@ -1051,12 +1072,14 @@ async function loadInitialData() {
     return;
   }
 
-  const [categorias, marcas, ubicaciones, productos, stock, remitos, pedidos] = await Promise.all([
+  const [categorias, marcas, ubicaciones, productos, stock, stockBase, stockBaseDetalle, remitos, pedidos] = await Promise.all([
     fetchTable("categorias"),
     fetchTable("marcas"),
     fetchTable("ubicaciones"),
     fetchProducts(),
     fetchStock(),
+    fetchStockBaseFotos(),
+    fetchStockBaseDetalle(),
     fetchRemitos(),
     fetchPedidos()
   ]);
@@ -1068,6 +1091,9 @@ async function loadInitialData() {
     ubicaciones,
     productos,
     stock,
+    stockBaseFotos: stockBase.data,
+    stockBaseDetalle: stockBaseDetalle.data,
+    stockBaseReady: stockBase.ready && stockBaseDetalle.ready,
     remitos,
     pedidos
   };
@@ -1135,6 +1161,45 @@ async function fetchStock() {
   }
 
   return data || [];
+}
+
+async function fetchStockBaseFotos() {
+  const { data, error } = await supabaseClient
+    .from("stock_base_fotos")
+    .select("*")
+    .order("fecha", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    if (isMissingStockBaseSchemaError(error)) return { data: [], ready: false };
+    setConnectionError(error.message);
+    return { data: [], ready: false };
+  }
+
+  return { data: data || [], ready: true };
+}
+
+async function fetchStockBaseDetalle() {
+  const { data, error } = await supabaseClient
+    .from("stock_base_detalle")
+    .select("*");
+
+  if (error) {
+    if (isMissingStockBaseSchemaError(error)) return { data: [], ready: false };
+    setConnectionError(error.message);
+    return { data: [], ready: false };
+  }
+
+  return { data: data || [], ready: true };
+}
+
+function isMissingStockBaseSchemaError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return error?.code === "42P01"
+    || error?.code === "PGRST205"
+    || message.includes("stock_base_fotos")
+    || message.includes("stock_base_detalle")
+    || message.includes("crear_stock_base");
 }
 
 async function fetchRemitos() {
@@ -1301,6 +1366,7 @@ function renderAll() {
   renderLocations();
   renderMerchandiseProductOptions();
   renderStockTable();
+  renderStockSummary();
   renderTransferProductOptions();
   renderTransferItems();
   renderPedidos();
@@ -1319,6 +1385,9 @@ function renderAll() {
 function renderSelects() {
   fillSelect("#stock-category-filter", state.categorias, "Todas las categorías");
   fillSelect("#stock-brand-filter", state.marcas, "Todas las marcas");
+  fillSelect("#summary-location-filter", state.ubicaciones, "Todas las ubicaciones");
+  fillSelect("#summary-category-filter", state.categorias, "Todas las categorías");
+  setDefaultSummaryLocation();
   fillSelect("#transfer-origin", state.ubicaciones, "Elegir origen");
   fillSelect("#transfer-destination", state.ubicaciones, "Elegir destino");
   fillSelect("#transfer-category-filter", state.categorias, "Todas las categorías");
@@ -1354,6 +1423,14 @@ function fillPedidoDestinationSelect() {
 
 function setDefaultTransferOrigin() {
   const select = document.querySelector("#transfer-origin");
+  if (!select || select.value) return;
+
+  const deposit = state.ubicaciones.find((item) => item.nombre === DEPOSITO_MINORISTA);
+  if (deposit) select.value = deposit.id;
+}
+
+function setDefaultSummaryLocation() {
+  const select = document.querySelector("#summary-location-filter");
   if (!select || select.value) return;
 
   const deposit = state.ubicaciones.find((item) => item.nombre === DEPOSITO_MINORISTA);
@@ -2508,6 +2585,213 @@ function renderStockCard(row) {
       <strong>Stock: ${escapeHtml(formatQuantityWithUnit(row.cantidad, unit))}</strong>
     </article>
   `;
+}
+
+function renderStockSummary() {
+  const list = document.querySelector("#stock-summary-list");
+  const info = document.querySelector("#stock-base-info");
+  const dateInput = document.querySelector("#stock-base-date");
+  if (!list) return;
+
+  if (dateInput && !dateInput.value) {
+    dateInput.value = getTodayInputValue();
+  }
+
+  if (!state.stockBaseReady) {
+    if (info) info.textContent = "Ejecutá primero la migración de stock base.";
+    list.innerHTML = `
+      <div class="placeholder">
+        <strong>Falta preparar Supabase para Resumen de stock.</strong>
+        <span>Ejecutá el archivo supabase/add-stock-summary-base.sql y después recargá la app.</span>
+      </div>
+    `;
+    return;
+  }
+
+  const activeBase = getActiveStockBase();
+  if (info) {
+    info.textContent = activeBase
+      ? `${activeBase.nombre || "Foto base"} · ${formatDate(activeBase.fecha)}`
+      : "Todavía no hay foto base activa.";
+  }
+
+  if (!activeBase) {
+    list.innerHTML = `
+      <div class="placeholder">
+        <strong>Sin stock base.</strong>
+        <span>Creá una foto base para comparar el stock actual sin modificar cantidades reales.</span>
+      </div>
+    `;
+    return;
+  }
+
+  const groups = buildStockSummaryGroups(activeBase.id);
+  if (!groups.length) {
+    list.innerHTML = '<div class="empty stock-card-empty">No hay datos para los filtros seleccionados.</div>';
+    return;
+  }
+
+  list.innerHTML = groups.map(renderStockSummaryGroup).join("");
+}
+
+function getActiveStockBase() {
+  return state.stockBaseFotos.find((foto) => foto.activa) || state.stockBaseFotos[0] || null;
+}
+
+function buildStockSummaryGroups(baseId) {
+  const locationId = document.querySelector("#summary-location-filter")?.value || "";
+  const categoryId = document.querySelector("#summary-category-filter")?.value || "";
+  const productById = new Map(state.productos.map((product) => [product.id, product]));
+  const currentByKey = new Map();
+  const baseByKey = new Map();
+
+  state.stock
+    .filter((row) => row.productos && row.ubicaciones)
+    .filter((row) => !locationId || row.ubicacion_id === locationId)
+    .filter((row) => !categoryId || row.productos.categoria_id === categoryId)
+    .forEach((row) => {
+      currentByKey.set(`${row.producto_id}:${row.ubicacion_id}`, row);
+    });
+
+  state.stockBaseDetalle
+    .filter((row) => row.foto_id === baseId)
+    .filter((row) => !locationId || row.ubicacion_id === locationId)
+    .filter((row) => !categoryId || row.categoria_id === categoryId)
+    .forEach((row) => {
+      baseByKey.set(`${row.producto_id}:${row.ubicacion_id}`, row);
+    });
+
+  const detailKeys = new Set([...currentByKey.keys(), ...baseByKey.keys()]);
+  const groups = new Map();
+
+  detailKeys.forEach((detailKey) => {
+    const currentRow = currentByKey.get(detailKey);
+    const baseRow = baseByKey.get(detailKey);
+    const product = currentRow?.productos || productById.get(baseRow?.producto_id) || null;
+    const unit = product ? getProductUnit(product) : (baseRow?.unidad_stock || DEFAULT_UNIT);
+    const categoryName = product?.categorias?.nombre || baseRow?.categoria_nombre || "Sin categoría";
+    const groupCategoryId = product?.categoria_id || baseRow?.categoria_id || "";
+    const groupKey = `${groupCategoryId || categoryName}:${unit}`;
+
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, {
+        key: groupKey,
+        categoryName,
+        unit,
+        initial: 0,
+        current: 0,
+        details: []
+      });
+    }
+
+    const group = groups.get(groupKey);
+    const initial = Number(baseRow?.cantidad_inicial || 0);
+    const current = Number(currentRow?.cantidad || 0);
+    group.initial += initial;
+    group.current += current;
+    group.details.push({
+      name: product?.nombre || baseRow?.producto_nombre || "Producto sin nombre",
+      initial,
+      current,
+      difference: current - initial
+    });
+  });
+
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      difference: group.current - group.initial,
+      variation: getVariationPercent(group.initial, group.current),
+      details: group.details.sort((a, b) => {
+        const diff = Math.abs(b.difference) - Math.abs(a.difference);
+        return diff || compareText(a.name, b.name);
+      })
+    }))
+    .sort((a, b) => compareText(a.categoryName, b.categoryName) || compareText(a.unit, b.unit));
+}
+
+function renderStockSummaryGroup(group) {
+  const encodedKey = encodeURIComponent(group.key);
+  const isOpen = Boolean(state.stockSummaryExpanded[encodedKey]);
+  const status = getSummaryStatus(group.difference);
+  const variation = group.variation === null ? "—" : `${formatQuantity(group.variation)}%`;
+
+  return `
+    <article class="summary-card">
+      <button class="summary-card-head" data-summary-toggle="${encodedKey}" type="button" aria-expanded="${isOpen}">
+        <div>
+          <h3>${escapeHtml(group.categoryName)}</h3>
+          <span>${escapeHtml(unitPlural(group.unit).toUpperCase())}</span>
+        </div>
+        <strong class="summary-status ${status.className}">${escapeHtml(status.label)}</strong>
+      </button>
+      <div class="summary-grid">
+        <span><small>Inicial</small><strong>${escapeHtml(formatQuantityWithUnit(group.initial, group.unit))}</strong></span>
+        <span><small>Actual</small><strong>${escapeHtml(formatQuantityWithUnit(group.current, group.unit))}</strong></span>
+        <span><small>Diferencia</small><strong>${escapeHtml(formatSignedQuantity(group.difference, group.unit))}</strong></span>
+        <span><small>Variación</small><strong>${escapeHtml(variation)}</strong></span>
+      </div>
+      ${isOpen ? renderStockSummaryDetails(group) : ""}
+    </article>
+  `;
+}
+
+function renderStockSummaryDetails(group) {
+  const rows = group.details.map((detail) => `
+    <tr>
+      <td>${escapeHtml(detail.name)}</td>
+      <td class="number">${escapeHtml(formatQuantity(detail.initial))}</td>
+      <td class="number">${escapeHtml(formatQuantity(detail.current))}</td>
+      <td class="number">${escapeHtml(formatSignedQuantity(detail.difference, group.unit))}</td>
+    </tr>
+  `).join("");
+
+  return `
+    <div class="summary-detail-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Artículo</th>
+            <th class="number">Inicial</th>
+            <th class="number">Actual</th>
+            <th class="number">Diferencia</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function createStockBaseSnapshot() {
+  if (state.isCreatingStockBase) return;
+  if (!supabaseClient) {
+    showMessage("#summary-message", "Configurá Supabase antes de crear la foto base.", "error");
+    return;
+  }
+
+  const date = document.querySelector("#stock-base-date")?.value || getTodayInputValue();
+  const confirmed = window.confirm(`¿Crear una nueva foto base con fecha ${formatDate(date)}? No modifica el stock real.`);
+  if (!confirmed) return;
+
+  state.isCreatingStockBase = true;
+  setButtonBusy("#create-stock-base", true, "Creando...");
+
+  try {
+    const { error } = await supabaseClient.rpc("crear_stock_base", {
+      p_fecha: date,
+      p_nombre: `Stock base ${formatDate(date)}`
+    });
+
+    if (error) throw new Error(error.message);
+    showMessage("#summary-message", "Foto base creada correctamente. El stock real no fue modificado.", "ok");
+    await loadInitialData();
+  } catch (error) {
+    showMessage("#summary-message", error.message, "error");
+  } finally {
+    state.isCreatingStockBase = false;
+    setButtonBusy("#create-stock-base", false);
+  }
 }
 
 function getDepositoMinoristaId() {
@@ -4008,6 +4292,14 @@ function formatReceiptNumber(numero) {
   return digits ? digits.padStart(6, "0") : String(numero || "");
 }
 
+function getTodayInputValue() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function formatDate(value) {
   if (!value) return "";
   const [year, month, day] = String(value).split("-");
@@ -4211,6 +4503,25 @@ function unitPlural(unit) {
 
 function formatQuantityWithUnit(value, unit) {
   return `${formatQuantity(value)} ${unitPlural(unit)}`;
+}
+
+function formatSignedQuantity(value, unit) {
+  const numeric = Number(value || 0);
+  const sign = numeric > 0 ? "+" : "";
+  return `${sign}${formatQuantity(numeric)} ${unitPlural(unit)}`;
+}
+
+function getVariationPercent(initial, current) {
+  const base = Number(initial || 0);
+  if (base === 0) return Number(current || 0) === 0 ? 0 : null;
+  return ((Number(current || 0) - base) / base) * 100;
+}
+
+function getSummaryStatus(difference) {
+  const value = Number(difference || 0);
+  if (value > 0) return { label: "↑ SUBIÓ", className: "up" };
+  if (value < 0) return { label: "↓ BAJÓ", className: "down" };
+  return { label: "= SE MANTIENE", className: "same" };
 }
 
 function compareText(a, b) {

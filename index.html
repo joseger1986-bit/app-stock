@@ -54,6 +54,7 @@
 
     <nav class="main-nav hidden" id="main-nav" aria-label="Menú principal">
       <button class="nav-item" data-screen="stock" type="button">Stock</button>
+      <button class="nav-item" data-screen="resumen" type="button">Resumen</button>
       <button class="nav-item" data-screen="mercaderia" type="button">Mercadería</button>
       <button class="nav-item active" data-screen="transferencias" type="button">Transferencias</button>
       <button class="nav-item" data-screen="pedidos" type="button">Pedidos</button>
@@ -118,6 +119,39 @@
           </table>
         </div>
         <div class="stock-cards" id="stock-cards"></div>
+      </section>
+
+      <section class="screen" id="screen-resumen" aria-labelledby="resumen-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Análisis</p>
+            <h2 id="resumen-title">Resumen de stock</h2>
+            <p class="screen-subtitle">Comparación contra stock base</p>
+          </div>
+        </div>
+
+        <div class="work-panel summary-base-panel">
+          <div>
+            <strong>Stock base</strong>
+            <p id="stock-base-info">Sin foto base activa.</p>
+          </div>
+          <label>
+            Fecha de la foto
+            <input id="stock-base-date" type="date">
+          </label>
+          <button class="secondary-action" id="create-stock-base" type="button">Crear foto base</button>
+        </div>
+
+        <div class="filters summary-filters">
+          <select id="summary-location-filter" aria-label="Ubicación">
+            <option value="">Todas las ubicaciones</option>
+          </select>
+          <select id="summary-category-filter" aria-label="Categoría">
+            <option value="">Todas las categorías</option>
+          </select>
+        </div>
+        <div class="message" id="summary-message" role="status"></div>
+        <div class="stock-summary-list" id="stock-summary-list"></div>
       </section>
 
       <section class="screen" id="screen-mercaderia" aria-labelledby="mercaderia-title">
