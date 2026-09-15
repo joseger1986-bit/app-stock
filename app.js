@@ -187,8 +187,11 @@ async function initializeAuth() {
 
 async function login() {
   clearMessage("#auth-message");
+  document.querySelector("#device-pending")?.classList.add("hidden");
   const user = cleanValue("#login-user");
   const password = document.querySelector("#login-password")?.value || "";
+  const device = state.device || getStoredDevice();
+  if (device) saveStoredDevice(device);
 
   if (!user || !password) {
     showMessage("#auth-message", "Ingresá usuario y contraseña.", "error");
@@ -199,16 +202,30 @@ async function login() {
     setButtonBusy("#login-button", true, "Ingresando...");
     const email = await resolveLoginEmail(user);
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (isInvalidLoginError(error)) {
+        throw new Error("Contraseña incorrecta. Intentá nuevamente.");
+      }
+      throw new Error(error.message);
+    }
 
     state.session = data.session;
     document.querySelector("#login-password").value = "";
     await verifyCurrentDevice();
   } catch (error) {
+    if (device) saveStoredDevice(device);
+    showLoginScreen();
     showMessage("#auth-message", error.message, "error");
   } finally {
     setButtonBusy("#login-button", false);
   }
+}
+
+function isInvalidLoginError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return error?.code === "invalid_credentials"
+    || message.includes("invalid login credentials")
+    || message.includes("invalid credentials");
 }
 
 async function resolveLoginEmail(user) {
